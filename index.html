@@ -969,6 +969,7 @@ button{font-family:inherit;}
 
 /* ===== FICHA DE ARTÍCULO (detalle al tocar un artículo del catálogo) ===== */
 #articleDetailOverlay,#addArticleOverlay{z-index:95;}
+.open-art{cursor:pointer}.inv-counted-info.open-art:hover b{text-decoration:underline}.open-art-hint{color:#60a5fa}
 .art-panel{width:min(880px,96vw);max-height:94vh;overflow:auto;}
 .art-sku-chip{display:inline-block;padding:4px 12px;background:rgba(45,118,255,.16);border:1px solid rgba(45,118,255,.4);border-radius:999px;color:#c1d8ff;font:700 .74rem var(--technical);margin-bottom:8px;}
 .art-codes{margin:0 0 16px;display:flex;flex-direction:column;gap:2px;}
@@ -4600,8 +4601,8 @@ function renderReceivingSession(){
   }
   const rows = receivingSessionRowsSorted();
   wrap.innerHTML = rows.map(row=>`<div class="inv-counted-row">
-      <img src="${(PRODUCTS_BY_REF[row.ref]||{}).img||''}" alt="" onerror="this.style.opacity=.25">
-      <div class="inv-counted-info"><b>${row.title}</b><small>SKU ${row.ref} · 📍 ${formatLocationLabel(row.location)}</small></div>
+      <img src="${(PRODUCTS_BY_REF[row.ref]||{}).img||''}" alt="" onerror="this.style.opacity=.25" class="open-art" onclick="openArticleDetail('${row.ref}')" title="Abrir artículo (costo y precio)">
+      <div class="inv-counted-info open-art" onclick="openArticleDetail('${row.ref}')" title="Abrir artículo (costo y precio)"><b>${row.title}</b><small>SKU ${row.ref} · 📍 ${formatLocationLabel(row.location)} · <span class="open-art-hint">✏️ costo / precio</span></small></div>
       <input type="number" min="1" class="recv-qty-input" value="${row.qty}" title="Cantidad" onchange="updateReceivingSessionQty('${row.ref}', this.value)">
       <button class="mini-btn mini-btn--del" onclick="removeReceivingSessionItem('${row.ref}')">🗑</button>
     </div>`).join('');
@@ -4701,8 +4702,8 @@ function renderCountedItemsList(){
     const p = PRODUCTS_BY_REF[ref];
     const qty = area.counts[ref];
     return `<div class="inv-counted-row${ref===lastAddedRef?' is-new-scan':''}">
-      <img src="${p?p.img:''}" alt="" onerror="this.style.opacity=.25">
-      <div class="inv-counted-info"><b>${p?p.title:ref}</b><small>SKU ${ref}</small></div>
+      <img src="${p?p.img:''}" alt="" onerror="this.style.opacity=.25" class="open-art" onclick="openArticleDetail('${ref}')" title="Abrir artículo (costo y precio)">
+      <div class="inv-counted-info open-art" onclick="openArticleDetail('${ref}')" title="Abrir artículo (costo y precio)"><b>${p?p.title:ref}</b><small>SKU ${ref} · <span class="open-art-hint">✏️ costo / precio</span></small></div>
       <span class="inv-counted-qty" id="cntlbl-${ref}">${qty} contados</span>
       <input type="number" min="0" step="1" value="${qty}" class="inv-remove-qty inv-set-qty" title="Cantidad contada: escribe el número y se guarda solo" oninput="scheduleSetCountQty('${ref}', this)" onchange="setCountQty('${ref}', this.value, true)" onblur="setCountQty('${ref}', this.value, true)">
       <button class="mini-btn mini-btn--del" onclick="removeFromCount('${ref}', ${qty})">🗑 Eliminar</button>

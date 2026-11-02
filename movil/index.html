@@ -76,6 +76,16 @@ nav button span{font-size:21px}
 nav button.on{color:#fff}
 nav button.on span{transform:scale(1.1)}
 .tab{display:none}.tab.on{display:block}
+
+.locin{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;align-items:end}
+.locin label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#9fb0d0}
+.locin input{font-size:20px;font-weight:700;padding:12px;border-radius:10px;border:1px solid var(--line);background:#060b18;color:#fff;width:100%;min-width:0;text-transform:uppercase}
+.locin button{padding:14px 14px;border-radius:10px;border:0;background:#1d4ed8;color:#fff;font-weight:700;font-size:15px}
+.pricebox{margin-top:14px;background:#0b1430;border:1px solid #1e3a8a;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.pricebox .pbt{font-weight:800}.pricebox label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#9fb0d0}
+.pricebox input{font-size:20px;padding:12px;border-radius:10px;border:1px solid var(--line);background:#060b18;color:#fff}
+.edithint{display:block;font-size:11.5px;color:#60a5fa;margin-top:2px}
+.item img[data-open],.item .info[data-open]{cursor:pointer}
 #toast{position:fixed;left:50%;bottom:calc(76px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);opacity:0;transition:.2s;background:#111827;border:1px solid var(--line);padding:10px 14px;border-radius:12px;font-size:13.5px;z-index:20;max-width:92vw;text-align:center;pointer-events:none}
 #toast.show{opacity:1;transform:translateX(-50%)}
 #toast.bad{border-color:var(--bad);color:#fecaca}#toast.good{border-color:#166534}
@@ -128,7 +138,12 @@ nav button.on span{transform:scale(1.1)}
       <div class="kick">Área de conteo</div>
       <div class="area-row">
         <select id="areaSel"></select>
-        <button id="areaNew">＋ Nueva</button>
+      </div>
+      <div class="kick" style="margin-top:12px">Nueva ubicación</div>
+      <div class="locin">
+        <label>Tramo<input id="nTramo" type="text" autocomplete="off" autocapitalize="characters" placeholder="Ej. 3" enterkeyhint="next"></label>
+        <label>Estante<input id="nEst" type="text" autocomplete="off" autocapitalize="characters" placeholder="Ej. 2" enterkeyhint="done"></label>
+        <button id="areaNew">＋ Agregar</button>
       </div>
     </div>
     <div class="card" id="scanCardInv">
@@ -342,6 +357,9 @@ const OPS = {
       if(o.n <= 0) d.items = d.items.filter(x=>x.ref !== o.ref); else if(it) it.qty = o.n; else d.items.push({ref:o.ref, qty:o.n});
       if(!d.items.length) d.startedAt = null; return d; } }
 };
+// poner costo y/o precio de un artículo
+OPS.setLoc = { inv(r, o){ r = r || defaultRow(o.ref); r.location = o.location; return r; } };
+OPS.setPrice = { inv(r, o){ r = r || defaultRow(o.ref); if('cost' in o) r.cost = o.cost; if('price' in o) r.price = o.price; return r; } };
 // Cerrar entrada de un área (igual que en la PC): suma al stock, vacía lo contado y deja historial
 OPS.closeArea = {
   meta(m, o){ m = m || META_DEF(); m.countAreas = m.countAreas || [];
@@ -731,7 +749,8 @@ function isEditing(listId){ const a = document.activeElement; return a && a.tagN
 function itemHtml(ref, qty, kind){
   const p = BY_REF[ref] || {ref, title:ref, brand:''}; const row = view().inv[ref];
   const loc = row && row.location ? ` · 📍 ${esc(locLabel(row.location))}` : '';
-  return `<div class="item"><img src="${esc(imgOf(p))}" loading="lazy" onerror="this.src='${PH}'"><div class="info"><b>${esc(p.title)}</b><span class="mut">${esc(ref)}${loc}</span></div>
+  const pr = isAdmin() && row && row.price !== '' && row.price != null ? ` · 💲${Number(row.price).toLocaleString('es-DO')}` : '';
+  return `<div class="item"><img src="${esc(imgOf(p))}" loading="lazy" onerror="this.src='${PH}'" data-open="${esc(ref)}"><div class="info" data-open="${esc(ref)}"><b>${esc(p.title)}</b><span class="mut">${esc(ref)}${loc}${pr}</span>${isAdmin() ? '<span class="edithint">✏️ Toca para poner costo y precio</span>' : ''}</div>
     <input type="number" inputmode="numeric" min="0" value="${qty}" data-set="${kind}" data-ref="${esc(ref)}"><button data-del="${kind}" data-ref="${esc(ref)}">🗑</button></div>`;
 }
 function setQty(kind, ref, n){
@@ -787,16 +806,45 @@ function openDetail(ref){
       <tr><td>Referencia / SKU</td><td><b>${esc(ref)}</b></td></tr>
       <tr><td>Stock</td><td><b>${Number(row.stock)||0}</b></td></tr>
       <tr><td>Ubicación</td><td>${esc(locLabel(row.location))}</td></tr>
-      <tr><td>Precio</td><td>${money(row.price)}</td></tr>
-      ${(MAIN_ADMINS.includes(cfg.usuario) || cfg.costo) ? `<tr><td>Costo</td><td>${money(row.cost)}</td></tr>` : ''}
+      ${canEditPrice() ? '' : `<tr><td>Precio</td><td>${money(row.price)}</td></tr>`}
+      ${canCost() && !canEditPrice() ? `<tr><td>Costo</td><td>${money(row.cost)}</td></tr>` : ''}
       <tr><td>Código Zebra</td><td>${esc(ic[ref] || '—')}</td></tr>
       <tr><td>Códigos de barras</td><td>${codes.map(esc).join('<br>') || '—'}</td></tr>
       ${p.oe ? `<tr><td>OE</td><td>${esc(p.oe)}</td></tr>` : ''}
       ${p.refs.length ? `<tr><td>Refs. cruzadas</td><td>${p.refs.map(esc).join('<br>')}</td></tr>` : ''}
     </table>
+    ${isAdmin() ? `<div class="pricebox"><div class="pbt">📍 Dónde va ubicado</div>
+      <div class="locin"><label>Tramo<input id="lfTramo" type="text" autocomplete="off" autocapitalize="characters" value="${esc((row.location||'').split('/')[0] || '')}" placeholder="Ej. 3"></label>
+      <label>Estante<input id="lfEst" type="text" autocomplete="off" autocapitalize="characters" value="${esc((row.location||'').split('/')[1] || '')}" placeholder="Ej. 2"></label>
+      <button id="lfSave" data-ref="${esc(ref)}">Guardar</button></div></div>` : ''}
+    ${canEditPrice() ? `<div class="pricebox"><div class="pbt">💲 Costo y precio</div>
+      ${canCost() ? `<label>Costo (US$)<input id="pfCost" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(row.cost ?? '')}" placeholder="0.00"></label>` : ''}
+      <label>Precio final (US$)<input id="pfPrice" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(row.price ?? '')}" placeholder="0.00"></label>
+      ${canCost() ? `<div class="mut" id="pfMargin"></div>` : ''}
+      <button class="pri big" id="pfSave" data-ref="${esc(ref)}">Guardar costo y precio</button></div>` : ''}
     ${historyHtml(ref, v)}
     <button class="big" style="margin-top:14px" onclick="document.getElementById('sheet').classList.remove('on')">Cerrar</button>`;
   $('sheet').classList.add('on');
+  if(canEditPrice()) bindPriceForm();
+  if(isAdmin()) $('lfSave').onclick = ()=>{
+    const t = $('lfTramo').value.trim(), e = $('lfEst').value.trim();
+    if(!t || !e) return toast('Escribe tramo y estante.', 'bad');
+    queue({t:'setLoc', ref:$('lfSave').dataset.ref, location: t + '/' + e}); toast(`📍 Tramo ${t} · Estante ${e}`, 'ok'); $('sheet').classList.remove('on');
+  };
+}
+function canCost(){ return MAIN_ADMINS.includes(cfg.usuario) || !!cfg.costo; }
+function canEditPrice(){ return !isGuest() && (isAdmin() || canCost()); }
+function bindPriceForm(){
+  const c = $('pfCost'), pr = $('pfPrice'), mg = $('pfMargin');
+  const upd = ()=>{ if(!mg) return; const a = Number(c.value), b = Number(pr.value); mg.textContent = (c.value !== '' && pr.value !== '' && a > 0) ? `Ganancia: US$ ${(b - a).toFixed(2)} (${(((b - a) / a) * 100).toFixed(1)} %)` : ''; };
+  if(c) c.oninput = upd; pr.oninput = upd; upd();
+  $('pfSave').onclick = ()=>{
+    const ref = $('pfSave').dataset.ref; const op = {t:'setPrice', ref};
+    const num = x=> x.trim() === '' ? '' : Math.max(0, Math.round(Number(x) * 100) / 100);
+    if(pr.value.trim() !== '' && !isFinite(Number(pr.value))) return toast('Precio no válido.', 'bad');
+    op.price = num(pr.value); if(c){ if(c.value.trim() !== '' && !isFinite(Number(c.value))) return toast('Costo no válido.', 'bad'); op.cost = num(c.value); }
+    queue(op); toast('💲 Costo y precio guardados.', 'ok'); $('sheet').classList.remove('on');
+  };
 }
 function historyHtml(ref, v){
   const m = v.meta || {}; const ev = [];
@@ -902,9 +950,13 @@ new MutationObserver(()=>{ const b = document.getElementById('busMore'); if(b &&
 document.querySelectorAll('button.cam').forEach(b=> b.onclick = ()=>{ if(camOn) stopCam(); else startCam(); });
 document.querySelectorAll('.qty button').forEach(b=> b.onclick = ()=>{ const i = b.parentElement.querySelector('input'); i.value = Math.max(1, (Number(i.value)||1) + Number(b.dataset.q)); });
 $('areaSel').onchange = ()=>{ cfg.area = $('areaSel').value; save(LS.cfg, cfg); render(); };
+$('nTramo').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); $('nEst').focus(); } });
+$('nEst').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); $('areaNew').click(); } });
 $('areaNew').onclick = ()=>{
-  const tramo = (prompt('Tramo (ej. 1, 2, A…):') || '').trim(); if(!tramo) return;
-  const estante = (prompt('Estante (ej. 1, 2, B…):') || '').trim(); if(!estante) return;
+  const tramo = $('nTramo').value.trim(), estante = $('nEst').value.trim();
+  if(!tramo){ toast('Escribe el tramo.', 'bad'); $('nTramo').focus(); return; }
+  if(!estante){ toast('Escribe el estante.', 'bad'); $('nEst').focus(); return; }
+  $('nTramo').value = ''; $('nEst').value = ''; $('inInv').focus();
   cfg.area = JSON.stringify([tramo, estante]); save(LS.cfg, cfg);
   queue({t:'newArea', tramo, estante}); toast(`Área Tramo ${tramo} · Estante ${estante}`, 'good');
 };
@@ -918,7 +970,7 @@ const setTimers = {};
   const el = $(id);
   el.addEventListener('input', e=>{ const i = e.target.closest('[data-set]'); if(!i) return; const k = i.dataset.set + i.dataset.ref; clearTimeout(setTimers[k]); setTimers[k] = setTimeout(()=>{ if(i.value.trim() !== '') setQty(i.dataset.set, i.dataset.ref, i.value); }, 800); });
   el.addEventListener('focusout', e=>{ const i = e.target.closest('[data-set]'); if(i){ const k = i.dataset.set + i.dataset.ref; clearTimeout(setTimers[k]); if(i.value.trim() !== ''){ const cur = i.defaultValue; if(String(i.value) !== String(cur)) setQty(i.dataset.set, i.dataset.ref, i.value); } setTimeout(render, 50); } });
-  el.addEventListener('click', e=>{ const b = e.target.closest('[data-del]'); if(b){ setQty(b.dataset.del, b.dataset.ref, 0); toast('Quitado.'); } });
+  el.addEventListener('click', e=>{ const o = e.target.closest('[data-open]'); if(o){ openDetail(o.dataset.open); return; } const b = e.target.closest('[data-del]'); if(b){ setQty(b.dataset.del, b.dataset.ref, 0); toast('Quitado.'); } });
 });
 window.addEventListener('online', ()=>{ refreshChip(); pull(); runOps(); });
 window.addEventListener('offline', refreshChip);
