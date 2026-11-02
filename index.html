@@ -3917,46 +3917,49 @@ function scrollToScanHistory(){
 
 /* Escaneo automático sin Enter: el lector de códigos teclea muy rápido en ráfaga;
    detectamos esa ráfaga y registramos solo al escanear. Enter sigue funcionando como respaldo. */
-let _scanTimer = null;
-let _scanLastKeyTs = 0;
-let _scanFastCount = 0;
-const SCAN_IDLE_MS = 120;   // pausa que marca el fin de la lectura del escáner
-const SCAN_FAST_GAP = 55;   // ms entre teclas típico de un escáner (una persona teclea más lento)
-const _scanEl = document.getElementById('scanInput');
-if(_scanEl){
-  _scanEl.addEventListener('keydown', e=>{
-    if(e.key === 'Enter'){
+/* Detección automática de lecturas del escáner (lector USB/Bluetooth que "teclea" el código).
+   Registra solo, sin Enter: cuando llega una ráfaga rápida de teclas y luego una pausa corta.
+   También registra al pegar un código. Lo usan "Registrar artículos" (en Automático) y
+   "Recepción de mercancía" (siempre automático). */
+const SCAN_IDLE_MS = 150;   // pausa que marca el fin de la lectura del escáner
+const SCAN_FAST_GAP = 80;   // ms entre teclas típico de un escáner (una persona teclea más lento)
+function attachAutoScan(el, isAuto, submit){
+  if(!el) return;
+  let timer = null, lastKeyTs = 0, fastCount = 0, pasted = false;
+  const fire = ()=>{
+    timer = null;
+    if(!isAuto()) return;
+    if(fastCount < 2 && !pasted) return;          // escritura a mano: espera Enter
+    const code = el.value.trim();
+    fastCount = 0; pasted = false;
+    if(code.length >= 3) submit(code);
+  };
+  el.addEventListener('keydown', e=>{
+    if(e.key === 'Enter' || e.key === 'Tab' && el.value.trim() && fastCount >= 2){
       e.preventDefault();
-      if(_scanTimer){ clearTimeout(_scanTimer); _scanTimer = null; }
-      _scanFastCount = 0;
-      submitScanCode(e.target.value.trim());
+      if(timer){ clearTimeout(timer); timer = null; }
+      fastCount = 0; pasted = false;
+      const code = el.value.trim();
+      if(code) submit(code);
       return;
     }
     if(e.key.length === 1){
       const now = Date.now();
-      const gap = now - _scanLastKeyTs;
-      _scanLastKeyTs = now;
-      _scanFastCount = (gap <= SCAN_FAST_GAP) ? _scanFastCount + 1 : 0;
+      const gap = now - lastKeyTs;
+      lastKeyTs = now;
+      fastCount = (gap <= SCAN_FAST_GAP) ? fastCount + 1 : 0;
     }
   });
-  _scanEl.addEventListener('input', ()=>{
-    if(scanMode !== 'auto') return;                 // en manual se registra con el botón/Enter
-    if(_scanTimer){ clearTimeout(_scanTimer); _scanTimer = null; }
-    if(_scanEl.value.trim().length < 3) return;
-    _scanTimer = setTimeout(()=>{
-      _scanTimer = null;
-      if(_scanFastCount < 2) return;                // solo si llegó como ráfaga de escáner
-      const code = _scanEl.value.trim();
-      _scanFastCount = 0;
-      if(code) submitScanCode(code);
-    }, SCAN_IDLE_MS);
+  el.addEventListener('paste', ()=>{ pasted = true; });
+  el.addEventListener('input', ()=>{
+    if(!isAuto()) return;
+    if(timer){ clearTimeout(timer); timer = null; }
+    if(el.value.trim().length < 3) return;
+    timer = setTimeout(fire, SCAN_IDLE_MS);
   });
 }
-document.getElementById('receivingScanInput') && document.getElementById('receivingScanInput').addEventListener('keydown', e=>{
-  if(e.key !== 'Enter') return;
-  e.preventDefault();
-  submitReceivingScan(e.target.value.trim());
-});
+attachAutoScan(document.getElementById('scanInput'), ()=> scanMode === 'auto', code=> submitScanCode(code));
+attachAutoScan(document.getElementById('receivingScanInput'), ()=> true, code=> submitReceivingScan(code));
 // Misma lógica que al apretar Enter en el campo de escaneo — reutilizada por el escáner de cámara.
 function submitScanCode(code){
   if(!code) return;
