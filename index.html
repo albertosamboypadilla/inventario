@@ -2791,10 +2791,7 @@ async function makeServerDbApi(cfg){
         changed = true;
       }
       S.seqInv = inv.seq;
-      if(firstSync && !remoteEmpty){
-        // PC nueva conectándose a un servidor que ya tiene datos: lo del servidor manda
-        Object.keys(inventoryState).forEach(ref=>{ if(!S.inv[ref]){ delete inventoryState[ref]; changed = true; } });
-      }
+      // PC que se conecta por primera vez: sus artículos que el servidor no tiene se SUBEN (no se pierden)
       const docs = await api('GET', '/docs?desde=' + S.seqDocs);
       for(const row of docs.rows){
         const h = SRV_DOCS[row.id]; if(!h) continue;
@@ -2804,6 +2801,7 @@ async function makeServerDbApi(cfg){
         const local = h.get(); const localStr = JSON.stringify(local);
         let next;
         if(b && localStr !== b.s) next = merge3(parse(b.s), local, row.data);
+        else if(!b) next = merge3(undefined, row.data, local);   // primera vez: juntar lo de esta PC con lo del servidor
         else next = row.data;
         h.set(JSON.parse(JSON.stringify(next)));
         S.docs[row.id] = {v: row.version, s: JSON.stringify(row.data)};
