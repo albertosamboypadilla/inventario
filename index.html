@@ -1171,6 +1171,7 @@ body{overflow-x:hidden;}
       <button data-en="FAQ" onclick="document.getElementById('faq').scrollIntoView({behavior:'smooth'})">Preguntas Frecuentes</button>
       <button data-en="Contact" onclick="document.querySelector('.footer-bottom').scrollIntoView({behavior:'smooth'})">Contacto</button>
       <button id="staffPanelNavBtn" data-en="Staff Panel" style="display:none;color:#8ee9c3;" onclick="openOrdersWindow()">Panel Interno</button>
+      <button class="users-btn" data-en="Users" style="display:none;color:#fbbf24;" onclick="openUsersPanel()">👥 Usuarios</button>
     </div>
   </nav>
 </header>
@@ -1476,6 +1477,7 @@ body{overflow-x:hidden;}
       <button onclick="refreshOrdersPanel()">↻ Actualizar</button>
       <button id="goInventoryBtn" onclick="openInventoryWindow()" style="display:none;">Ir a Inventario →</button>
       <button id="goReceivingBtn" onclick="openReceivingPanel()" style="display:none;">📦 Recepción de mercancía</button>
+      <button class="users-btn" onclick="openUsersPanel()" style="display:none;">👥 Usuarios</button>
       <button onclick="logout()">⇥ Salir</button>
     </div>
 
@@ -1911,6 +1913,7 @@ let internalCodes = {};  // { [ref]: '00001' } — código interno Zebra permane
 let nextInternalCode = 1; // contador que solo avanza — nunca se reutiliza un número, ni al eliminar un artículo
 let receivingSession = [];   // [{ref, qty}] — sesión de escaneo activa de Recepción de mercancía, en memoria hasta "Cerrar Entrada"
 let receivingSessionStartedAt = null;
+let inventoryEntriesLog = []; // [{date, user, area, totalUnits, items:[{ref,title,location,qty}]}] — entradas de inventario cerradas (historial)
 let receivingKardex = [];    // [{date, user, items:[{ref,title,location,qty}], totalUnits}] — historial de entradas cerradas
 // Costo y Precio final del catálogo se cargan/guardan en US$ para que no pierdan valor si el peso
 // dominicano se devalúa. usdRate = cuántos RD$ vale 1 US$ hoy; se usa para convertir a pesos
@@ -2376,7 +2379,7 @@ async function idbDel(k){ try{ const db = await idbOpen(); await new Promise((re
 function collectAppState(){
   return {inventoryState, ordersState, locations, deletedRefs, countAreas, activeAreaIndex, salesLog,
     internalCodes, nextInternalCode, receivingKardex, receivingSession, receivingSessionStartedAt,
-    scanHistory, usdRate, usdRateDate, usdRateManual};
+    scanHistory, usdRate, usdRateDate, usdRateManual, inventoryEntriesLog};
 }
 function assignAppState(st){
   if(!st) return;
@@ -2393,6 +2396,7 @@ function assignAppState(st){
   if(st.receivingSession) receivingSession = st.receivingSession;
   if(st.receivingSessionStartedAt!==undefined) receivingSessionStartedAt = st.receivingSessionStartedAt;
   if(st.scanHistory) scanHistory = st.scanHistory;
+  if(st.inventoryEntriesLog) inventoryEntriesLog = st.inventoryEntriesLog;
   if(st.usdRate!==undefined && st.usdRate!==null){ usdRate = st.usdRate; usdRateDate = st.usdRateDate||''; usdRateManual = !!st.usdRateManual; }
 }
 let _idbStateTimer = null;
@@ -2665,7 +2669,7 @@ async function serverLogin(u, p){
     if(!r.ok) return {ok:false, reason:'error'};
     const j = await r.json();
     srvSave({url:s.url, token:j.token, usuario:j.usuario});
-    return {ok:true, rol:j.rol, nombre:j.nombre};
+    return {ok:true, rol:j.rol, nombre:j.nombre, costo:!!j.costo, superAdmin:!!j.superAdmin};
   }catch(e){ return {ok:false, reason:'red'}; }
 }
 async function serverLogout(){
@@ -2701,7 +2705,7 @@ const SRV_DOCS = {
     set: d=>{ ordersState = (d && d.list) || []; try{ normalizeOrders(); }catch(e){} }
   },
   meta: {
-    get: ()=>({locations, deletedRefs, countAreas, activeAreaIndex, salesLog, internalCodes, nextInternalCode, receivingKardex, scanHistory,
+    get: ()=>({locations, deletedRefs, countAreas, activeAreaIndex, salesLog, internalCodes, nextInternalCode, receivingKardex, scanHistory, inventoryEntriesLog,
                usdRateInfo: usdRateManual ? {rate:usdRate, date:usdRateDate, manual:true} : null}),
     set: d=>{
       if(!d) return;
@@ -2714,6 +2718,7 @@ const SRV_DOCS = {
       if(d.nextInternalCode!==undefined) nextInternalCode = d.nextInternalCode;
       if(d.receivingKardex) receivingKardex = d.receivingKardex;
       if(d.scanHistory) scanHistory = d.scanHistory;
+      if(d.inventoryEntriesLog) inventoryEntriesLog = d.inventoryEntriesLog;
       if(d.usdRateInfo && d.usdRateInfo.rate){ usdRate = Number(d.usdRateInfo.rate); usdRateDate = d.usdRateInfo.date||''; usdRateManual = true; try{ saveUsdRateToStorage(); }catch(e){} }
     }
   },
@@ -2970,6 +2975,159 @@ function restoreCustomProducts(){
     const p = products[i];
     if(p._custom && !(inventoryState[p.ref] && inventoryState[p.ref].product)){ products.splice(i, 1); delete PRODUCTS_BY_REF[p.ref]; }
   }
+}
+
+/* ===================== PDF "Lista de acomodo" (mismo en la PC y en el celular) =====================
+   Genera un PDF A4 sin librerías: artículos agrupados y ordenados por ubicación, con casilla ☐ para
+   marcar a mano cuando se coloca cada uno. Se usa al Cerrar Entrada de Recepción y de Inventario. */
+function etLocLabel(l){ if(!l) return 'SIN UBICACIÓN'; const m = /^([^/]+)\/([^/]+)$/.exec(l); return m ? `Tramo ${m[1]} · Estante ${m[2]}` : String(l); }
+function etBuildAcomodoPdf(o){
+  // o = {titulo, subtitulo, usuario, fecha (Date), items:[{ref,title,qty,location}]}
+  const W = 595.28, H = 841.89, M = 36;
+  const enc = s => { s = String(s == null ? '' : s).replace(/[·•]/g, '\xB7').replace(/[–—]/g, '-').replace(/[“”]/g, '"').replace(/[‘’]/g, "'").replace(/…/g, '\x85');
+    let out = ''; for(const ch of s){ const c = ch.charCodeAt(0); out += c < 256 ? ch : '?'; }
+    return out.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)'); };
+  const width = (s, size) => String(s).length * size * 0.5;
+  const fit = (s, size, maxW) => { s = String(s || ''); if(width(s, size) <= maxW) return s; let n = Math.max(1, Math.floor(maxW / (size * 0.5)) - 1); return s.slice(0, n) + '…'; };
+  const rows = (o.items || []).filter(r => Number(r.qty) > 0).map(r => ({...r, loc: etLocLabel(r.location)}))
+    .sort((a, b) => (a.location ? 0 : 1) - (b.location ? 0 : 1) || a.loc.localeCompare(b.loc, 'es', {numeric:true}) || String(a.title).localeCompare(String(b.title), 'es'));
+  const total = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
+  const fecha = o.fecha || new Date();
+  const fechaTxt = fecha.toLocaleString('es-DO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'});
+  const pages = []; let cur = []; let y = 0;
+  const cmd = (s) => cur.push(s);
+  const text = (x, yy, s, size, bold, gray) => cmd(`BT /${bold ? 'F2' : 'F1'} ${size} Tf ${gray ? '0.35 g' : '0 g'} ${x.toFixed(1)} ${yy.toFixed(1)} Td (${enc(s)}) Tj ET`);
+  const line = (x1, y1, x2, y2, w) => cmd(`${w || 0.5} w 0.6 G ${x1} ${y1} m ${x2} ${y2} l S`);
+  const rect = (x, yy, w, h, fill) => cmd(fill ? `${fill} rg ${x} ${yy} ${w} ${h} re f 0 g` : `0.8 w 0 G ${x} ${yy} ${w} ${h} re S`);
+  const C = {chk: M, ref: M + 22, desc: M + 112, qty: W - M - 40};
+  const header = (first) => {
+    if(first){
+      text(M, H - M - 6, o.titulo || 'Lista de acomodo', 17, true);
+      text(M, H - M - 24, (o.subtitulo ? o.subtitulo + '  ·  ' : '') + fechaTxt + (o.usuario ? '  ·  ' + o.usuario : ''), 9.5, false, true);
+      text(M, H - M - 38, `${rows.length} artículo(s) · ${total} unidad(es) · ordenado por ubicación para llevar cada artículo a su lugar`, 9.5, false, true);
+      y = H - M - 58;
+    } else { text(M, H - M - 6, (o.titulo || 'Lista de acomodo') + ' (continuación)', 11, true); y = H - M - 22; }
+    rect(M, y - 4, W - 2 * M, 16, '0.9 0.93 0.97');
+    text(C.chk + 2, y, 'OK', 8.5, true); text(C.ref, y, 'Referencia', 8.5, true); text(C.desc, y, 'Descripción', 8.5, true); text(C.qty, y, 'Cant.', 8.5, true);
+    y -= 18;
+  };
+  const newPage = () => { if(cur.length) pages.push(cur); cur = []; header(pages.length === 0); };
+  newPage();
+  let lastLoc = null;
+  for(const r of rows){
+    if(y < M + 40) newPage(), lastLoc = null;
+    if(r.loc !== lastLoc){
+      const sub = rows.filter(x => x.loc === r.loc).reduce((s, x) => s + (Number(x.qty) || 0), 0);
+      y -= 4; rect(M, y - 4, W - 2 * M, 16, r.location ? '0.86 0.95 0.89' : '0.98 0.88 0.88');
+      text(M + 6, y, (r.location ? 'UBICACIÓN: ' : '') + r.loc, 10, true); text(C.qty - 30, y, `${sub} u.`, 9, true);
+      y -= 18; lastLoc = r.loc;
+    }
+    rect(C.chk + 2, y - 2, 10, 10);
+    text(C.ref, y, fit(r.ref, 9, C.desc - C.ref - 6), 9, true);
+    text(C.desc, y, fit(r.title, 9, C.qty - C.desc - 10), 9);
+    text(C.qty + 6, y, String(r.qty), 10, true);
+    line(M, y - 5, W - M, y - 5, 0.3);
+    y -= 16;
+  }
+  if(y < M + 60) newPage();
+  y -= 10; text(M, y, `TOTAL: ${total} unidad(es) en ${rows.length} artículo(s)`, 11, true);
+  y -= 26; text(M, y, 'Acomodado por: ______________________________     Revisado por: ______________________________', 9, false, true);
+  pages.push(cur);
+  // armar el PDF
+  const objs = []; const add = s => { objs.push(s); return objs.length; };
+  const f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+  const f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+  const pagesId = objs.length + 1; objs.push(null);
+  const kids = [];
+  pages.forEach((p, i) => {
+    p.push(`BT /F1 8 Tf 0.45 g ${W - M - 60} ${M - 18} Td (${enc('Página ' + (i + 1) + ' de ' + pages.length)}) Tj ET`);
+    const content = p.join('\n');
+    const cId = add(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+    kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${cId} 0 R >>`));
+  });
+  objs[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map(k => k + ' 0 R').join(' ')}] /Count ${kids.length} >>`;
+  const catalog = add(`<< /Type /Catalog /Pages ${pagesId} 0 R >>`);
+  let pdf = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n'; const offs = [];
+  objs.forEach((o2, i) => { offs.push(pdf.length); pdf += `${i + 1} 0 obj\n${o2}\nendobj\n`; });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` + offs.map(n => String(n).padStart(10, '0') + ' 00000 n \n').join('');
+  pdf += `trailer\n<< /Size ${objs.length + 1} /Root ${catalog} 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  const bytes = new Uint8Array(pdf.length); for(let i = 0; i < pdf.length; i++) bytes[i] = pdf.charCodeAt(i) & 255;
+  return new Blob([bytes], {type:'application/pdf'});
+}
+function etStamp(d){ d = d || new Date(); const z = n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}_${z(d.getHours())}${z(d.getMinutes())}`; }
+function etDownloadBlob(blob, name){
+  const url = URL.createObjectURL(blob); const a = document.createElement('a');
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 60000);
+}
+
+/* ===================== Usuarios (solo Alberto / Empresa) ===================== */
+const SUPER_ADMINS = ['alberto','albertosamboy89@gmail.com'];
+function isSuperAdmin(){ return !!(currentUser && (currentUser.superAdmin || SUPER_ADMINS.includes(currentUser.username))); }
+async function usersApi(method, path, body){
+  const s = srvSettings();
+  if(!s.url || !s.token) throw new Error('Inicia sesión conectado al servidor para gestionar usuarios.');
+  const r = await fetch(s.url + '/api/usuarios' + (path||''), {method, headers:{'Authorization':'Bearer '+s.token,'Content-Type':'application/json'}, body: body ? JSON.stringify(body) : undefined});
+  const j = await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(j.error || ('Error ' + r.status));
+  return j;
+}
+function openUsersPanel(){
+  if(!isSuperAdmin()){ showToast('Solo el usuario principal puede gestionar usuarios.'); return; }
+  let ov = document.getElementById('usersOverlay');
+  if(!ov){
+    ov = document.createElement('div'); ov.id = 'usersOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:9000;background:rgba(5,10,20,.72);display:flex;align-items:flex-start;justify-content:center;overflow:auto;padding:30px 12px';
+    ov.innerHTML = `<div style="background:#111a2e;color:#e8edf7;border:1px solid #26324f;border-radius:16px;max-width:760px;width:100%;padding:20px 22px;font:14px system-ui,sans-serif">
+      <div style="display:flex;align-items:center;gap:10px"><h3 style="margin:0;font-size:20px">👥 Usuarios</h3><span style="color:#8b97b3;font-size:12px">Solo tú (usuario principal) ves esta pantalla</span><button onclick="closeUsersPanel()" style="margin-left:auto;background:#1b2540;color:#fff;border:0;border-radius:8px;padding:8px 12px;cursor:pointer">✕ Cerrar</button></div>
+      <form id="userForm" onsubmit="saveUserForm(event)" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0;background:#0d1424;border:1px solid #26324f;border-radius:12px;padding:14px">
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#8b97b3">Usuario<input id="ufUser" required autocomplete="off" style="padding:9px;border-radius:8px;border:1px solid #26324f;background:#0b1120;color:#fff"></label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#8b97b3">Nombre<input id="ufName" autocomplete="off" style="padding:9px;border-radius:8px;border:1px solid #26324f;background:#0b1120;color:#fff"></label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#8b97b3">Clave <span id="ufPassHint" style="font-size:11px"></span><input id="ufPass" type="text" autocomplete="new-password" style="padding:9px;border-radius:8px;border:1px solid #26324f;background:#0b1120;color:#fff"></label>
+        <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#8b97b3">Permisos<select id="ufRole" style="padding:9px;border-radius:8px;border:1px solid #26324f;background:#0b1120;color:#fff"><option value="admin">Administrador (inventario, recepción, cotizaciones)</option><option value="staff">Staff (solo cotizaciones y consulta)</option></select></label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px"><input id="ufCost" type="checkbox"> Puede ver y poner <b>costos</b></label>
+        <div style="display:flex;gap:8px;align-items:end"><button type="submit" style="flex:1;background:#3b82f6;color:#fff;border:0;border-radius:8px;padding:10px;font-weight:700;cursor:pointer">Guardar usuario</button><button type="button" onclick="resetUserForm()" style="background:#1b2540;color:#fff;border:0;border-radius:8px;padding:10px;cursor:pointer">Nuevo</button></div>
+      </form>
+      <div id="usersList">Cargando…</div>
+      <p style="color:#8b97b3;font-size:12px;margin:12px 0 0">Los usuarios sirven en la página, en todas las PC y en la app del celular. Al cambiar la clave de alguien, se le cierra la sesión en los otros equipos.</p>
+    </div>`;
+    document.body.appendChild(ov);
+  }
+  ov.style.display = 'flex'; resetUserForm(); loadUsersList();
+}
+function closeUsersPanel(){ const ov = document.getElementById('usersOverlay'); if(ov) ov.style.display = 'none'; }
+function resetUserForm(){ const f = document.getElementById('userForm'); if(!f) return; f.reset(); document.getElementById('ufUser').readOnly = false; document.getElementById('ufPassHint').textContent = '(mínimo 4)'; document.getElementById('ufRole').value = 'admin'; }
+let _usersCache = [];
+async function loadUsersList(){
+  const box = document.getElementById('usersList');
+  try{
+    const j = await usersApi('GET'); _usersCache = j.usuarios || [];
+    box.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13.5px"><tr style="color:#8b97b3;text-align:left"><th style="padding:6px">Usuario</th><th>Nombre</th><th>Permisos</th><th>Costos</th><th></th></tr>` +
+      _usersCache.map(u=>`<tr style="border-top:1px solid #26324f"><td style="padding:8px 6px"><b>${u.usuario}</b>${u.principal?' <span style="color:#fbbf24;font-size:11px">★ principal</span>':''}</td><td>${u.nombre||''}</td><td>${u.rol==='admin'?'Administrador':'Staff'}</td><td>${u.costo?'✔':'—'}</td>
+        <td style="text-align:right;white-space:nowrap"><button onclick="editUser('${u.usuario}')" style="background:#1b2540;color:#fff;border:0;border-radius:7px;padding:6px 10px;cursor:pointer">✏️ Editar</button> ${u.principal?'':`<button onclick="deleteUser('${u.usuario}')" style="background:#3b1d24;color:#fecaca;border:0;border-radius:7px;padding:6px 10px;cursor:pointer">🗑</button>`}</td></tr>`).join('') + `</table>`;
+  }catch(e){ box.innerHTML = `<div style="color:#fca5a5">${e.message}</div>`; }
+}
+function editUser(name){
+  const u = _usersCache.find(x=>x.usuario===name); if(!u) return;
+  document.getElementById('ufUser').value = u.usuario; document.getElementById('ufUser').readOnly = true;
+  document.getElementById('ufName').value = u.nombre || ''; document.getElementById('ufPass').value = '';
+  document.getElementById('ufPassHint').textContent = '(vacía = no cambiar)';
+  document.getElementById('ufRole').value = u.rol; document.getElementById('ufCost').checked = !!u.costo;
+  document.getElementById('ufUser').scrollIntoView({block:'center'});
+}
+async function saveUserForm(e){
+  e.preventDefault();
+  const body = {usuario: document.getElementById('ufUser').value.trim(), nombre: document.getElementById('ufName').value.trim(), clave: document.getElementById('ufPass').value, rol: document.getElementById('ufRole').value, costo: document.getElementById('ufCost').checked};
+  if(!body.clave) delete body.clave;
+  try{ const r = await usersApi('POST', '', body); playAddSound(); showToast(r.creado ? `Usuario "${body.usuario}" creado.` : `Usuario "${body.usuario}" actualizado.`); resetUserForm(); loadUsersList(); }
+  catch(err){ playErrorSound(); showToast(err.message); }
+  return false;
+}
+async function deleteUser(name){
+  if(!confirm(`¿Eliminar el usuario "${name}"? Ya no podrá entrar en ningún equipo.`)) return;
+  try{ await usersApi('DELETE', '/' + encodeURIComponent(name)); showToast(`Usuario "${name}" eliminado.`); loadUsersList(); }
+  catch(err){ showToast(err.message); }
 }
 
 async function initData(){
@@ -3504,7 +3662,7 @@ const USERS = {
 const QUICK_SALE_USERS = ['albertosamboy89@gmail.com','alberto','admin2']; // únicos que pueden usar la venta rápida de la página principal
 function canQuickSale(){ return !!(currentUser && QUICK_SALE_USERS.includes(currentUser.username)); }
 const MAIN_ADMINS = ['albertosamboy89@gmail.com','alberto','admin2']; // únicos que pueden ver el Costo de los artículos
-function canSeeCost(){ return !!(currentUser && MAIN_ADMINS.includes(currentUser.username)); }
+function canSeeCost(){ return !!(currentUser && (MAIN_ADMINS.includes(currentUser.username) || currentUser.costo)); }
 let currentUser = null; // {username, role}
 let ordersView = 'active'; // 'active' | 'history'
 let pendingDeepLink = null; // set when a new tab/window was opened for a specific panel and needs login first
@@ -3581,7 +3739,7 @@ async function handleLogin(e){
   if(srv.ok || (srv.reason !== 'clave' && localOk)){
     if(srv.ok) initData(); else autoConnectOnlineSave(u, p);
     if(!srv.ok && srv.reason === 'red') setTimeout(()=>showToast('Sin conexión con el servidor: se trabaja local y se sube al volver.'), 3300);
-    currentUser = {username:u, role: srv.rol || (rec && rec.role) || 'staff'};
+    currentUser = {username:u, role: srv.rol || (rec && rec.role) || 'staff', costo: !!srv.costo, superAdmin: !!srv.superAdmin};
     saveSession();
     document.getElementById('loginForm').reset();
     closeLogin();
@@ -3627,7 +3785,9 @@ function updateAuthUI(){
     navBtn.style.display = '';
     if(quickSaleBar) quickSaleBar.style.display = canQuickSale() ? '' : 'none';
     if(backupSection) backupSection.style.display = (currentUser.username === 'alberto') ? '' : 'none';
+    document.querySelectorAll('.users-btn').forEach(b=> b.style.display = isSuperAdmin() ? '' : 'none');
   } else {
+    document.querySelectorAll('.users-btn').forEach(b=> b.style.display = 'none');
     btn.classList.remove('is-logged');
     label.textContent = 'Acceso empresa';
     navBtn.style.display = 'none';
@@ -4144,11 +4304,16 @@ function closeAreaEntry(){
   if(!refs.length){ showToast('No hay nada contado en esta área todavía.'); return; }
   const totalQty = refs.reduce((s,r)=>s+(Number(area.counts[r])||0),0);
   if(!confirm(`Vas a cerrar esta entrada: se sumarán ${totalQty} unidad(es) de ${refs.length} artículo(s) al inventario y el tramo quedará vacío. ¿Continuar?`)) return;
+  const items = refs.map(ref=>{ const p = PRODUCTS_BY_REF[ref]; const inv = getInv(ref); return {ref, title: p ? p.title : ref, location: inv.location || (area.tramo + '/' + area.estante), qty: Number(area.counts[ref])||0}; });
   refs.forEach(ref=>{
     const inv = getInv(ref);
     inv.stock = (Number(inv.stock)||0) + (Number(area.counts[ref])||0);
   });
   area.counts = {};
+  const now = new Date();
+  inventoryEntriesLog.unshift({date: now.toISOString(), user: currentUser ? currentUser.username : '—', area: area.tramo + '/' + area.estante, totalUnits: totalQty, items});
+  inventoryEntriesLog = inventoryEntriesLog.slice(0, 200);
+  try{ etDownloadBlob(etBuildAcomodoPdf({titulo:'Entrada de inventario — Lista de acomodo', subtitulo:`Tramo ${area.tramo} · Estante ${area.estante}`, usuario: currentUser ? currentUser.username : '', fecha: now, items}), `entrada_inventario_${etStamp(now)}.pdf`); }catch(e){ console.warn('PDF', e); }
   saveInventory();
   saveMeta();
   renderCountedItemsList();
@@ -4469,6 +4634,7 @@ function closeReceivingEntry(){
   renderInventoryStats();
 
   downloadReceivingExcel(rows, nowIso);
+  try{ etDownloadBlob(etBuildAcomodoPdf({titulo:'Recepción de mercancía — Lista de acomodo', usuario: currentUser ? currentUser.username : '', fecha: new Date(nowIso), items: rows}), `recepcion_acomodo_${etStamp(new Date(nowIso))}.pdf`); }catch(e){ console.warn('PDF', e); }
 
   receivingSession = [];
   receivingSessionStartedAt = null;
