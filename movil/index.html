@@ -21,7 +21,8 @@ header b{font-size:16px;letter-spacing:.3px}
 header small{color:var(--mut);display:block;font-size:11px}
 .chip{margin-left:auto;font-size:11.5px;font-weight:600;padding:5px 9px;border-radius:999px;background:#334155;white-space:nowrap}
 .chip.ok{background:#14532d;color:#bbf7d0}.chip.saving{background:#713f12;color:#fde68a}.chip.off{background:#7f1d1d;color:#fecaca}
-main{padding:12px 12px 20px}
+main{padding:12px 12px calc(110px + env(safe-area-inset-bottom))}
+#busMore{margin:10px 0 24px;background:#1d4ed8;color:#fff;font-weight:700}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:12px}
 .kick{font-size:11px;font-weight:700;letter-spacing:.8px;color:#7aa2ff;text-transform:uppercase;margin:0 0 8px}
 .row{display:flex;gap:8px;align-items:center}
@@ -759,7 +760,7 @@ function doSearch(more){
   out.innerHTML = res.length ? head + shown.map(p=>{ const n = st.get(p.ref); const cls = n <= 0 ? 's0' : n <= 3 ? 's1' : 's2'; const row = v.inv[p.ref];
       const loc = isGuest() ? '' : `<span class="locline${row && row.location ? '' : ' none'}">📍 ${esc(row && row.location ? locLabel(row.location) : 'Sin ubicación')}</span>`;
       return `<div class="res" data-open="${esc(p.ref)}"><img src="${esc(imgOf(p))}" loading="lazy" onerror="this.src='${PH}'"><div class="info"><b>${esc(p.title)}</b><span class="mut">${esc(p.ref)} · ${esc(p.brand)}</span>${loc}</div><div class="stock ${cls}">${n > 0 ? n : 'Agotado'}<small>${n > 0 ? 'en stock' : ''}</small></div></div>`; }).join('')
-      + (res.length > busShown ? `<button class="big" id="busMore" style="margin-top:6px">Ver más (${(res.length - busShown).toLocaleString('es-DO')} restantes)</button>` : '')
+      + (res.length > busShown ? `<button class="big" id="busMore">Ver más (${(res.length - busShown).toLocaleString('es-DO')} restantes)</button>` : '')
     : `<div class="empty">Sin resultados para “${esc(q)}”.</div>`;
 }
 function openDetail(ref){
@@ -895,7 +896,9 @@ $('btnSalir').onclick = doLogout;
 $('closeInv').onclick = ()=>closeEntry('inv');
 $('closeRec').onclick = ()=>closeEntry('rec');
 $('lbtn').onclick = doLogin;
-$('gbtn').onclick = ()=> startGuest(); $('lp').addEventListener('keydown', e=>{ if(e.key === 'Enter') doLogin(); });
+$('gbtn').onclick = ()=> startGuest();
+let _moreObs = ('IntersectionObserver' in window) ? new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting && e.target.id === 'busMore' && currentTab === 'bus'){ busShown += 60; doSearch(true); } }); }, {rootMargin:'0px 0px 300px 0px'}) : null;
+new MutationObserver(()=>{ const b = document.getElementById('busMore'); if(b && _moreObs && !b._obs){ b._obs = 1; _moreObs.observe(b); } }).observe(document.getElementById('listBus'), {childList:true}); $('lp').addEventListener('keydown', e=>{ if(e.key === 'Enter') doLogin(); });
 document.querySelectorAll('button.cam').forEach(b=> b.onclick = ()=>{ if(camOn) stopCam(); else startCam(); });
 document.querySelectorAll('.qty button').forEach(b=> b.onclick = ()=>{ const i = b.parentElement.querySelector('input'); i.value = Math.max(1, (Number(i.value)||1) + Number(b.dataset.q)); });
 $('areaSel').onchange = ()=>{ cfg.area = $('areaSel').value; save(LS.cfg, cfg); render(); };
