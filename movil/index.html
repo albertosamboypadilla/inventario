@@ -38,7 +38,11 @@ button.cam.on{background:var(--bad);color:#fff}
 #camWrap{display:none;position:relative;border-radius:12px;overflow:hidden;margin-top:10px;background:#000;aspect-ratio:4/3}
 #camWrap.on{display:block}
 #cam{width:100%;height:100%;object-fit:cover}
-#camWrap .aim{position:absolute;left:12%;right:12%;top:38%;bottom:38%;border:2px solid rgba(142,233,195,.9);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.25)}
+#camWrap .aim{position:absolute;left:8%;right:8%;top:32%;bottom:32%;border:2px solid rgba(142,233,195,.9);border-radius:10px;box-shadow:0 0 0 999px rgba(0,0,0,.25)}
+#camWrap .tools{position:absolute;top:8px;right:8px;display:flex;gap:6px}
+#camWrap .tools button{background:rgba(0,0,0,.55);color:#fff;padding:8px 10px;font-size:18px}
+#camWrap .tools button.on{background:#f59e0b;color:#000}
+button.foto{background:#1e3a5f;color:#dbeafe;min-width:54px;font-size:20px;padding:10px 12px}
 #camWrap .hint{position:absolute;bottom:8px;left:0;right:0;text-align:center;font-size:12px;color:#d1fae5;text-shadow:0 1px 2px #000}
 .qty{display:flex;align-items:center;gap:6px;margin-top:10px}
 .qty button{width:44px;padding:10px 0;font-size:18px}
@@ -119,7 +123,7 @@ nav button.on span{transform:scale(1.1)}
       <div class="kick">Escanear para contar</div>
       <div class="scanbox">
         <input id="inInv" type="text" inputmode="text" autocomplete="off" autocapitalize="none" placeholder="Código, SKU o GTIN (lector o escribe)">
-        <button class="cam" data-cam="inv">📷</button>
+        <button class="cam" data-cam="inv" title="Escanear con la cámara">📷</button><button class="foto" data-foto title="Tomar foto del código">📸</button>
       </div>
       <div class="qty"><button data-q="-1">−</button><input id="qtyInv" type="number" min="1" value="1"><button data-q="1">＋</button><span>unidades por lectura</span></div>
     </div>
@@ -137,7 +141,7 @@ nav button.on span{transform:scale(1.1)}
       <div class="kick">Recepción de mercancía</div>
       <div class="scanbox">
         <input id="inRec" type="text" autocomplete="off" autocapitalize="none" placeholder="Código, SKU o GTIN (lector o escribe)">
-        <button class="cam" data-cam="rec">📷</button>
+        <button class="cam" data-cam="rec" title="Escanear con la cámara">📷</button><button class="foto" data-foto title="Tomar foto del código">📸</button>
       </div>
       <div class="qty"><button data-q="-1">−</button><input id="qtyRec" type="number" min="1" value="1"><button data-q="1">＋</button><span>unidades por lectura</span></div>
     </div>
@@ -155,14 +159,15 @@ nav button.on span{transform:scale(1.1)}
       <div class="kick">Buscar artículo</div>
       <div class="scanbox">
         <input id="inBus" type="search" autocomplete="off" autocapitalize="none" placeholder="Nombre, referencia, OE, GTIN…">
-        <button class="cam" data-cam="bus">📷</button>
+        <button class="cam" data-cam="bus" title="Escanear con la cámara">📷</button><button class="foto" data-foto title="Tomar foto del código">📸</button>
       </div>
     </div>
     <div id="camHolder"></div>
     <div class="list" id="listBus"></div>
   </section>
 
-  <div id="camWrap"><video id="cam" playsinline muted></video><div class="aim"></div><div class="hint" id="camHint">Apunta al código de barras</div></div>
+  <div id="camWrap"><video id="cam" playsinline muted autoplay></video><div class="aim"></div><div class="tools"><button id="btnTorch" style="display:none" title="Linterna">🔦</button><button id="btnZoom" style="display:none" title="Zoom">1×</button></div><div class="hint" id="camHint">Pon el código dentro del recuadro</div></div>
+  <input type="file" id="fotoIn" accept="image/*" capture="environment" style="display:none">
 </main>
 
 <nav>
@@ -424,44 +429,144 @@ function autoScan(el, submit){
   });
 }
 
-/* ---------- cámara ---------- */
-let camOn = false, camStream = null, camLoop = null, zxReader = null, lastCam = {code:'', ts:0};
+/* ---------- cámara ----------
+   Lector ZXing-C++ (zxing-wasm): lee códigos de una línea (EAN, UPC, Code 39 Zebra, Code 128, ITF)
+   mucho mejor que el anterior. Cada cuadro se prueba de varias formas (recorte del recuadro, recorte
+   ampliado, imagen completa) y en Android además con el lector integrado de Chrome. */
+const ZX_URL = 'https://cdn.jsdelivr.net/npm/zxing-wasm@2/dist/es/reader/index.js';
+const ZX_OPT = {tryHarder:true, tryRotate:true, tryInvert:true, tryDownscale:true, maxNumberOfSymbols:1};
+let zxMod = null;
+async function loadZX(){ if(zxMod) return zxMod; zxMod = await import(ZX_URL); return zxMod; }
+async function zxRead(canvas, extra){
+  const z = await loadZX();
+  const ctx = canvas.getContext('2d', {willReadFrequently:true});
+  const r = await z.readBarcodes(ctx.getImageData(0, 0, canvas.width, canvas.height), Object.assign({}, ZX_OPT, extra||{}));
+  const ok = r.find(x=>x.isValid !== false && x.text);
+  return ok ? String(ok.text).trim() : null;
+}
+const work = document.createElement('canvas');
+function grab(video, rect, scale){
+  const w = Math.max(1, Math.round(rect.w * scale)), h = Math.max(1, Math.round(rect.h * scale));
+  if(work.width !== w) work.width = w; if(work.height !== h) work.height = h;
+  const ctx = work.getContext('2d', {willReadFrequently:true}); ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(video, rect.x, rect.y, rect.w, rect.h, 0, 0, w, h);
+  return work;
+}
+// Parte del video que se ve dentro del recuadro verde (con margen), en píxeles del video
+function aimRect(video){
+  const vw = video.videoWidth, vh = video.videoHeight, box = $('camWrap');
+  const bw = box.clientWidth || 1, bh = box.clientHeight || 1;
+  const s = Math.max(bw / vw, bh / vh);                  // object-fit: cover
+  const dispW = bw / s, dispH = bh / s, ox = (vw - dispW) / 2, oy = (vh - dispH) / 2;
+  const x = ox + dispW * 0.03, w = dispW * 0.94, y = oy + dispH * 0.22, h = dispH * 0.56;
+  return {x: Math.max(0, x), y: Math.max(0, y), w: Math.min(vw, w), h: Math.min(vh, h)};
+}
+let camOn = false, camStream = null, camTimer = null, camTick = 0, native = null, track = null, lastCam = {code:'', ts:0}, pendingUnknown = {code:'', n:0};
+function onCamCode(code){
+  if(!code) return;
+  const now = Date.now();
+  if(code === lastCam.code && now - lastCam.ts < 1800) return;
+  // un código que no existe se acepta solo si se lee 2 veces seguidas (evita lecturas falsas)
+  if(!findByCode(code) && currentTab !== 'bus'){
+    if(pendingUnknown.code === code){ pendingUnknown.n++; } else { pendingUnknown = {code, n:1}; }
+    if(pendingUnknown.n < 2) return;
+  }
+  pendingUnknown = {code:'', n:0};
+  lastCam = {code, ts:now};
+  handleCode(code, 'cam');
+}
 async function startCam(){
   const wrap = $('camWrap'); const holder = currentTab === 'bus' ? $('camHolder') : $(currentTab === 'inv' ? 'scanCardInv' : 'scanCardRec');
-  holder.appendChild(wrap); wrap.classList.add('on'); camOn = true;
+  holder.appendChild(wrap); wrap.classList.add('on'); camOn = true; camTick = 0;
   document.querySelectorAll('button.cam').forEach(b=>b.classList.toggle('on', b.dataset.cam === currentTab));
+  $('camHint').textContent = 'Abriendo cámara…';
   const video = $('cam');
-  const onCode = code=>{ const now = Date.now(); if(code === lastCam.code && now - lastCam.ts < 1800) return; lastCam = {code, ts:now}; handleCode(code, 'cam'); };
   try{
-    let native = null;
-    if('BarcodeDetector' in window){ try{ const f = await BarcodeDetector.getSupportedFormats(); if(f && f.length) native = new BarcodeDetector({formats: f.filter(x=>x !== 'qr_code').concat(['qr_code'])}); }catch(e){} }
-    if(native){
-      camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment', width:{ideal:1280}, height:{ideal:720}}, audio:false});
-      video.srcObject = camStream; await video.play();
-      const tick = async()=>{ if(!camOn) return; try{ const r = await native.detect(video); if(r && r.length && r[0].rawValue) onCode(r[0].rawValue.trim()); }catch(e){} camLoop = setTimeout(tick, 120); };
-      tick();
-    } else {
-      $('camHint').textContent = 'Cargando lector…';
-      await loadZXing();
-      const hints = new Map(); hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-      zxReader = new ZXing.BrowserMultiFormatReader(hints, 150);
-      $('camHint').textContent = 'Apunta al código de barras';
-      await zxReader.decodeFromConstraints({video:{facingMode:'environment'}}, video, (res)=>{ if(res && camOn) onCode(String(res.getText()).trim()); });
+    try{
+      camStream = await navigator.mediaDevices.getUserMedia({audio:false, video:{facingMode:{ideal:'environment'}, width:{ideal:1920}, height:{ideal:1080}, advanced:[{focusMode:'continuous'}]}});
+    }catch(e){
+      camStream = await navigator.mediaDevices.getUserMedia({audio:false, video:{facingMode:'environment'}});
     }
-  }catch(e){ stopCam(); toast('No se pudo abrir la cámara: ' + (e.message||e) + '. Revisa el permiso de cámara.', 'bad'); }
+    if(!camOn){ stopCam(); return; }
+    video.srcObject = camStream; await video.play().catch(()=>{});
+    track = camStream.getVideoTracks()[0];
+    setupCamTools();
+    native = null;
+    if('BarcodeDetector' in window){ try{ const f = await BarcodeDetector.getSupportedFormats(); if(f && f.length) native = new BarcodeDetector({formats:f}); }catch(e){} }
+    $('camHint').textContent = 'Cargando lector…';
+    loadZX().then(()=>{ if(camOn) $('camHint').textContent = 'Pon el código dentro del recuadro'; }).catch(()=>{ if(camOn) $('camHint').textContent = native ? 'Pon el código dentro del recuadro' : 'Sin internet para el lector: usa 📸 Foto o el lector Bluetooth'; });
+    loop();
+  }catch(e){ stopCam(); toast('No se pudo abrir la cámara: ' + (e.message||e) + '. Revisa el permiso de cámara del navegador.', 'bad'); }
 }
+async function loop(){
+  if(!camOn) return;
+  const video = $('cam');
+  if(video.readyState >= 2 && video.videoWidth){
+    try{
+      const rect = aimRect(video); let code = null;
+      if(native && camTick % 2 === 0){
+        try{ const r = await native.detect(grab(video, rect, 1)); if(r && r.length) code = String(r[0].rawValue||'').trim(); }catch(e){}
+      }
+      if(!code && zxMod){
+        const k = camTick % 3;
+        if(k === 0) code = await zxRead(grab(video, rect, 1), {tryDenoise:true});
+        else if(k === 1) code = await zxRead(grab(video, rect, rect.w < 900 ? 2 : 1.4));
+        else { const sc = Math.min(1, 1280 / video.videoWidth); code = await zxRead(grab(video, {x:0, y:0, w:video.videoWidth, h:video.videoHeight}, sc)); }
+      }
+      camTick++;
+      if(code) onCamCode(code);
+    }catch(e){}
+  }
+  camTimer = setTimeout(loop, 60);
+}
+let torchOn = false, zoomLevels = [], zoomIdx = 0;
+function setupCamTools(){
+  torchOn = false; $('btnTorch').classList.remove('on');
+  let caps = {}; try{ caps = track && track.getCapabilities ? track.getCapabilities() : {}; }catch(e){}
+  $('btnTorch').style.display = caps.torch ? '' : 'none';
+  zoomLevels = [];
+  if(caps.zoom && caps.zoom.max > 1){
+    const mn = caps.zoom.min || 1, mx = caps.zoom.max;
+    zoomLevels = [mn, Math.min(mx, 1.5), Math.min(mx, 2.5)].filter((v,i,a)=>a.indexOf(v) === i);
+    zoomIdx = Math.min(1, zoomLevels.length - 1);
+    applyZoom();
+    $('btnZoom').style.display = '';
+  } else $('btnZoom').style.display = 'none';
+}
+function applyZoom(){
+  const z = zoomLevels[zoomIdx]; if(!track || !z) return;
+  track.applyConstraints({advanced:[{zoom:z}]}).catch(()=>{});
+  $('btnZoom').textContent = (Math.round(z*10)/10) + '×';
+}
+$('btnTorch').onclick = ()=>{ if(!track) return; torchOn = !torchOn; track.applyConstraints({advanced:[{torch:torchOn}]}).catch(()=>{}); $('btnTorch').classList.toggle('on', torchOn); };
+$('btnZoom').onclick = ()=>{ if(!zoomLevels.length) return; zoomIdx = (zoomIdx + 1) % zoomLevels.length; applyZoom(); };
 function stopCam(){
-  camOn = false; clearTimeout(camLoop);
-  try{ if(zxReader) zxReader.reset(); }catch(e){} zxReader = null;
-  try{ if(camStream) camStream.getTracks().forEach(t=>t.stop()); }catch(e){} camStream = null;
-  const v = $('cam'); try{ if(v.srcObject && v.srcObject.getTracks) v.srcObject.getTracks().forEach(t=>t.stop()); }catch(e){} v.srcObject = null;
+  camOn = false; clearTimeout(camTimer);
+  try{ if(camStream) camStream.getTracks().forEach(t=>t.stop()); }catch(e){} camStream = null; track = null;
+  const v = $('cam'); v.srcObject = null;
   $('camWrap').classList.remove('on'); document.querySelectorAll('button.cam').forEach(b=>b.classList.remove('on'));
 }
-function loadZXing(){
-  if(window.ZXing) return Promise.resolve();
-  const tryLoad = src=>new Promise((res, rej)=>{ const s = document.createElement('script'); s.src = src; s.onload = ()=> window.ZXing ? res() : rej(); s.onerror = rej; document.head.appendChild(s); });
-  return tryLoad('zxing.min.js').catch(()=>tryLoad('https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'));
+// 📸 Foto: la cámara normal del celular (enfoca mejor, máxima calidad) y se lee la foto
+async function readPhoto(file){
+  toast('Leyendo foto…');
+  try{
+    const bmp = await createImageBitmap(file, {imageOrientation:'from-image'}).catch(()=>createImageBitmap(file));
+    const tries = [];
+    const mk = (sx, sy, sw, sh, maxW)=>{ const sc = Math.min(1, maxW / sw); const c = document.createElement('canvas'); c.width = Math.round(sw*sc); c.height = Math.round(sh*sc); const x = c.getContext('2d', {willReadFrequently:true}); x.imageSmoothingQuality = 'high'; x.drawImage(bmp, sx, sy, sw, sh, 0, 0, c.width, c.height); return c; };
+    const W = bmp.width, H = bmp.height;
+    tries.push(()=>mk(0, 0, W, H, 2000));
+    tries.push(()=>mk(W*.15, H*.25, W*.7, H*.5, 2000));
+    tries.push(()=>mk(0, 0, W, H, 1200));
+    tries.push(()=>mk(W*.25, H*.35, W*.5, H*.3, 1600));
+    let code = null;
+    if('BarcodeDetector' in window){ try{ const f = await BarcodeDetector.getSupportedFormats(); const r = await new BarcodeDetector({formats:f}).detect(bmp); if(r && r.length) code = String(r[0].rawValue||'').trim(); }catch(e){} }
+    for(const t of tries){ if(code) break; code = await zxRead(t(), {tryDenoise:true}).catch(()=>null); }
+    if(code){ lastCam = {code, ts:Date.now()}; handleCode(code, 'foto'); }
+    else { beep(false); toast('No se encontró un código en la foto. Acércate más, con buena luz y el código recto.', 'bad'); }
+  }catch(e){ toast('No se pudo leer la foto: ' + (e.message||e), 'bad'); }
 }
+$('fotoIn').addEventListener('change', e=>{ const f = e.target.files && e.target.files[0]; e.target.value = ''; if(f) readPhoto(f); });
+document.querySelectorAll('button[data-foto]').forEach(b=> b.onclick = ()=>{ if(camOn) stopCam(); $('fotoIn').click(); });
 
 /* ---------- pantallas ---------- */
 const isAdmin = ()=> cfg.rol === 'admin';
@@ -570,6 +675,7 @@ async function startApp(){
   rebuildCodes(); render(); refreshChip();
   if(!isAdmin()) setTab('bus');
   connectLive(); pull(); runOps();
+  setTimeout(()=>loadZX().catch(()=>{}), 1500);   // deja el lector listo (y guardado para usar sin internet)
 }
 
 /* ---------- eventos ---------- */
