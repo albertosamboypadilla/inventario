@@ -2669,7 +2669,7 @@ async function serverLogin(u, p){
     if(!r.ok) return {ok:false, reason:'error'};
     const j = await r.json();
     srvSave({url:s.url, token:j.token, usuario:j.usuario});
-    return {ok:true, rol:j.rol, nombre:j.nombre, costo:!!j.costo, superAdmin:!!j.superAdmin};
+    return {ok:true, rol:j.rol, nombre:j.nombre, costo:!!j.costo, venta:!!j.venta, superAdmin:!!j.superAdmin};
   }catch(e){ return {ok:false, reason:'red'}; }
 }
 async function serverLogout(){
@@ -3087,6 +3087,7 @@ function openUsersPanel(){
         <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#8b97b3">Clave <span id="ufPassHint" style="font-size:11px"></span><input id="ufPass" type="text" autocomplete="new-password" style="padding:9px;border-radius:8px;border:1px solid #26324f;background:#0b1120;color:#fff"></label>
         <label style="display:flex;flex-direction:column;gap:4px;font-size:12px;color:#8b97b3">Permisos<select id="ufRole" style="padding:9px;border-radius:8px;border:1px solid #26324f;background:#0b1120;color:#fff"><option value="admin">Administrador (inventario, recepción, cotizaciones)</option><option value="staff">Staff (solo cotizaciones y consulta)</option></select></label>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px"><input id="ufCost" type="checkbox"> Puede ver y poner <b>costos</b></label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px"><input id="ufSale" type="checkbox"> Puede usar la <b>venta rápida</b></label>
         <div style="display:flex;gap:8px;align-items:end"><button type="submit" style="flex:1;background:#3b82f6;color:#fff;border:0;border-radius:8px;padding:10px;font-weight:700;cursor:pointer">Guardar usuario</button><button type="button" onclick="resetUserForm()" style="background:#1b2540;color:#fff;border:0;border-radius:8px;padding:10px;cursor:pointer">Nuevo</button></div>
       </form>
       <div id="usersList">Cargando…</div>
@@ -3097,14 +3098,14 @@ function openUsersPanel(){
   ov.style.display = 'flex'; resetUserForm(); loadUsersList();
 }
 function closeUsersPanel(){ const ov = document.getElementById('usersOverlay'); if(ov) ov.style.display = 'none'; }
-function resetUserForm(){ const f = document.getElementById('userForm'); if(!f) return; f.reset(); document.getElementById('ufUser').readOnly = false; document.getElementById('ufPassHint').textContent = '(mínimo 4)'; document.getElementById('ufRole').value = 'admin'; }
+function resetUserForm(){ const f = document.getElementById('userForm'); if(!f) return; f.reset(); document.getElementById('ufUser').readOnly = false; document.getElementById('ufPassHint').textContent = '(mínimo 4)'; document.getElementById('ufRole').value = 'admin'; ['ufCost','ufSale','ufRole'].forEach(id=>document.getElementById(id).disabled = false); }
 let _usersCache = [];
 async function loadUsersList(){
   const box = document.getElementById('usersList');
   try{
     const j = await usersApi('GET'); _usersCache = j.usuarios || [];
-    box.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13.5px"><tr style="color:#8b97b3;text-align:left"><th style="padding:6px">Usuario</th><th>Nombre</th><th>Permisos</th><th>Costos</th><th></th></tr>` +
-      _usersCache.map(u=>`<tr style="border-top:1px solid #26324f"><td style="padding:8px 6px"><b>${u.usuario}</b>${u.principal?' <span style="color:#fbbf24;font-size:11px">★ principal</span>':''}</td><td>${u.nombre||''}</td><td>${u.rol==='admin'?'Administrador':'Staff'}</td><td>${u.costo?'✔':'—'}</td>
+    box.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13.5px"><tr style="color:#8b97b3;text-align:left"><th style="padding:6px">Usuario</th><th>Nombre</th><th>Permisos</th><th>Costos</th><th>Venta rápida</th><th></th></tr>` +
+      _usersCache.map(u=>`<tr style="border-top:1px solid #26324f"><td style="padding:8px 6px"><b>${u.usuario}</b>${u.principal?' <span style="color:#fbbf24;font-size:11px">★ principal</span>':''}</td><td>${u.nombre||''}</td><td>${u.rol==='admin'?'Administrador':'Staff'}</td><td>${u.costo?'✔':'—'}</td><td>${u.venta?'✔':'—'}</td>
         <td style="text-align:right;white-space:nowrap"><button onclick="editUser('${u.usuario}')" style="background:#1b2540;color:#fff;border:0;border-radius:7px;padding:6px 10px;cursor:pointer">✏️ Editar</button> ${u.principal?'':`<button onclick="deleteUser('${u.usuario}')" style="background:#3b1d24;color:#fecaca;border:0;border-radius:7px;padding:6px 10px;cursor:pointer">🗑</button>`}</td></tr>`).join('') + `</table>`;
   }catch(e){ box.innerHTML = `<div style="color:#fca5a5">${e.message}</div>`; }
 }
@@ -3113,12 +3114,12 @@ function editUser(name){
   document.getElementById('ufUser').value = u.usuario; document.getElementById('ufUser').readOnly = true;
   document.getElementById('ufName').value = u.nombre || ''; document.getElementById('ufPass').value = '';
   document.getElementById('ufPassHint').textContent = '(vacía = no cambiar)';
-  document.getElementById('ufRole').value = u.rol; document.getElementById('ufCost').checked = !!u.costo;
+  document.getElementById('ufRole').value = u.rol; document.getElementById('ufCost').checked = !!u.costo; document.getElementById('ufSale').checked = !!u.venta; ['ufCost','ufSale','ufRole'].forEach(id=>document.getElementById(id).disabled = !!u.principal);
   document.getElementById('ufUser').scrollIntoView({block:'center'});
 }
 async function saveUserForm(e){
   e.preventDefault();
-  const body = {usuario: document.getElementById('ufUser').value.trim(), nombre: document.getElementById('ufName').value.trim(), clave: document.getElementById('ufPass').value, rol: document.getElementById('ufRole').value, costo: document.getElementById('ufCost').checked};
+  const body = {usuario: document.getElementById('ufUser').value.trim(), nombre: document.getElementById('ufName').value.trim(), clave: document.getElementById('ufPass').value, rol: document.getElementById('ufRole').value, costo: document.getElementById('ufCost').checked, venta: document.getElementById('ufSale').checked};
   if(!body.clave) delete body.clave;
   try{ const r = await usersApi('POST', '', body); playAddSound(); showToast(r.creado ? `Usuario "${body.usuario}" creado.` : `Usuario "${body.usuario}" actualizado.`); resetUserForm(); loadUsersList(); }
   catch(err){ playErrorSound(); showToast(err.message); }
@@ -3660,9 +3661,9 @@ const USERS = {
   admin4: {hash:'a95206f0eb2f48b45ae58579bca0ce8c14c07b09b32ee9ea79da0a1930560bf4', wk:'P13pwboJMYHeiL/L6UX+LdqRIP7FgCg8YqLt/bH0aWVXaN8cuC9frrq4CLXIhdVIWuSPWetgd0elFbhF', role:'admin', label:'Admin 4 (Total)'}
 };
 const QUICK_SALE_USERS = ['albertosamboy89@gmail.com','alberto','admin2']; // únicos que pueden usar la venta rápida de la página principal
-function canQuickSale(){ return !!(currentUser && QUICK_SALE_USERS.includes(currentUser.username)); }
+function canQuickSale(){ return !!(currentUser && (QUICK_SALE_USERS.includes(currentUser.username) || currentUser.venta || isSuperAdmin())); }
 const MAIN_ADMINS = ['albertosamboy89@gmail.com','alberto','admin2']; // únicos que pueden ver el Costo de los artículos
-function canSeeCost(){ return !!(currentUser && (MAIN_ADMINS.includes(currentUser.username) || currentUser.costo)); }
+function canSeeCost(){ return !!(currentUser && (MAIN_ADMINS.includes(currentUser.username) || currentUser.costo || isSuperAdmin())); }
 let currentUser = null; // {username, role}
 let ordersView = 'active'; // 'active' | 'history'
 let pendingDeepLink = null; // set when a new tab/window was opened for a specific panel and needs login first
@@ -3739,7 +3740,7 @@ async function handleLogin(e){
   if(srv.ok || (srv.reason !== 'clave' && localOk)){
     if(srv.ok) initData(); else autoConnectOnlineSave(u, p);
     if(!srv.ok && srv.reason === 'red') setTimeout(()=>showToast('Sin conexión con el servidor: se trabaja local y se sube al volver.'), 3300);
-    currentUser = {username:u, role: srv.rol || (rec && rec.role) || 'staff', costo: !!srv.costo, superAdmin: !!srv.superAdmin};
+    currentUser = {username:u, role: srv.rol || (rec && rec.role) || 'staff', costo: !!srv.costo, venta: !!srv.venta, superAdmin: !!srv.superAdmin};
     saveSession();
     document.getElementById('loginForm').reset();
     closeLogin();
@@ -3784,7 +3785,7 @@ function updateAuthUI(){
     label.textContent = currentUser.username;
     navBtn.style.display = '';
     if(quickSaleBar) quickSaleBar.style.display = canQuickSale() ? '' : 'none';
-    if(backupSection) backupSection.style.display = (currentUser.username === 'alberto') ? '' : 'none';
+    if(backupSection) backupSection.style.display = isSuperAdmin() ? '' : 'none';
     document.querySelectorAll('.users-btn').forEach(b=> b.style.display = isSuperAdmin() ? '' : 'none');
   } else {
     document.querySelectorAll('.users-btn').forEach(b=> b.style.display = 'none');
