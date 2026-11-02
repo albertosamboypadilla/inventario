@@ -3923,6 +3923,28 @@ function scrollToScanHistory(){
    "Recepción de mercancía" (siempre automático). */
 const SCAN_IDLE_MS = 150;   // pausa que marca el fin de la lectura del escáner
 const SCAN_FAST_GAP = 80;   // ms entre teclas típico de un escáner (una persona teclea más lento)
+let _codeIndex = null, _codeIndexTs = 0;
+function allCodesIndex(){
+  if(_codeIndex && Date.now() - _codeIndexTs < 20000) return _codeIndex;
+  const set = new Set();
+  const add = c=>{ c = String(c||'').trim().toLowerCase(); if(c) set.add(c); };
+  visibleProducts().forEach(p=>{
+    add(p.ref); add(p.gtin); add(internalCodes[p.ref]);
+    (p.refsList||[]).forEach(add);
+    const inv = (typeof peekInv === 'function') ? peekInv(p.ref) : inventoryState[p.ref];
+    if(inv){ add(inv.gtin); (inv.altCodes||[]).forEach(add); }
+  });
+  _codeIndex = Array.from(set).sort(); _codeIndexTs = Date.now();
+  return _codeIndex;
+}
+// ¿Hay otro código más largo que empieza igual? (ej. "1.0002" y "1.00022")
+function codeHasLongerMatch(code){
+  const lc = code.trim().toLowerCase(); const arr = allCodesIndex();
+  let lo = 0, hi = arr.length;
+  while(lo < hi){ const mid = (lo + hi) >> 1; if(arr[mid] < lc) lo = mid + 1; else hi = mid; }
+  for(let i = lo; i < arr.length && arr[i].startsWith(lc); i++){ if(arr[i].length > lc.length) return true; }
+  return false;
+}
 function attachAutoScan(el, isAuto, submit){
   if(!el) return;
   let timer = null, lastKeyTs = 0, fastCount = 0, pasted = false;
@@ -3932,6 +3954,7 @@ function attachAutoScan(el, isAuto, submit){
     if(fastCount < 2 && !pasted) return;          // escritura a mano: espera Enter
     const code = el.value.trim();
     fastCount = 0; pasted = false;
+    if(typedTimer){ clearTimeout(typedTimer); typedTimer = null; }
     if(code.length >= 3) submit(code);
   };
   el.addEventListener('keydown', e=>{
@@ -3951,11 +3974,24 @@ function attachAutoScan(el, isAuto, submit){
     }
   });
   el.addEventListener('paste', ()=>{ pasted = true; });
+  // Escrito a mano (sin Enter): al dejar de escribir, si es un código que existe, se registra solo.
+  let typedTimer = null;
+  const typedCheck = (longWait)=>{
+    typedTimer = null;
+    if(!isAuto()) return;
+    const code = el.value.trim();
+    if(code.length < 3 || !findProductByCode(code)) return;     // todavía no es un código válido
+    if(!longWait && codeHasLongerMatch(code)){ typedTimer = setTimeout(()=>typedCheck(true), 1000); return; } // puede que siga escribiendo
+    fastCount = 0; pasted = false;
+    submit(code);
+  };
   el.addEventListener('input', ()=>{
     if(!isAuto()) return;
     if(timer){ clearTimeout(timer); timer = null; }
+    if(typedTimer){ clearTimeout(typedTimer); typedTimer = null; }
     if(el.value.trim().length < 3) return;
     timer = setTimeout(fire, SCAN_IDLE_MS);
+    typedTimer = setTimeout(()=>typedCheck(false), 700);
   });
 }
 attachAutoScan(document.getElementById('scanInput'), ()=> scanMode === 'auto', code=> submitScanCode(code));
