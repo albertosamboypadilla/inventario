@@ -4515,6 +4515,10 @@ function redownloadKardex(index){
 function renderCountedItemsList(){
   const wrap = document.getElementById('countedItemsList');
   if(!wrap) return;
+  // si se está escribiendo una cantidad, no redibujar (se perdería lo escrito); se redibuja al salir
+  const act = document.activeElement;
+  if(act && act.classList && act.classList.contains('inv-set-qty') && wrap.contains(act)){ wrap.dataset.pending = '1'; return; }
+  wrap.dataset.pending = '';
   const area = activeArea();
   const refs = Object.keys(area.counts).filter(r=>area.counts[r]>0);
   const tag = document.getElementById('areaCountedTag');
@@ -4532,9 +4536,9 @@ function renderCountedItemsList(){
     return `<div class="inv-counted-row${ref===lastAddedRef?' is-new-scan':''}">
       <img src="${p?p.img:''}" alt="" onerror="this.style.opacity=.25">
       <div class="inv-counted-info"><b>${p?p.title:ref}</b><small>SKU ${ref}</small></div>
-      <span class="inv-counted-qty">${qty} contados</span>
-      <input type="number" min="1" max="${qty}" value="1" class="inv-remove-qty" id="rmqty-${ref}">
-      <button class="mini-btn mini-btn--del" onclick="removeFromCount('${ref}', document.getElementById('rmqty-${ref}').value)">🗑 Eliminar</button>
+      <span class="inv-counted-qty" id="cntlbl-${ref}">${qty} contados</span>
+      <input type="number" min="0" step="1" value="${qty}" class="inv-remove-qty inv-set-qty" title="Cantidad contada: escribe el número y se guarda solo" oninput="scheduleSetCountQty('${ref}', this)" onchange="setCountQty('${ref}', this.value, true)" onblur="setCountQty('${ref}', this.value, true)">
+      <button class="mini-btn mini-btn--del" onclick="removeFromCount('${ref}', ${qty})">🗑 Eliminar</button>
     </div>`;
   }).join('');
 }
@@ -4589,6 +4593,32 @@ function changeLowStockPage(delta){
   renderLowStockList();
   const wrap = document.getElementById('lowStockList');
   if(wrap) wrap.scrollIntoView({behavior:'smooth', block:'start'});
+}
+/* La cantidad escrita en la lista de contados ES la cantidad contada (se guarda sola al dejar de escribir). */
+const _setQtyTimers = {};
+function scheduleSetCountQty(ref, el){
+  clearTimeout(_setQtyTimers[ref]);
+  _setQtyTimers[ref] = setTimeout(()=> setCountQty(ref, el.value, false), 800);
+}
+function setCountQty(ref, value, rerender){
+  clearTimeout(_setQtyTimers[ref]);
+  if(String(value).trim() === '') return;           // casilla vacía: esperar a que escriba
+  const n = Math.max(0, Math.floor(Number(value)));
+  if(!isFinite(n)) return;
+  const area = activeArea();
+  const have = Number(area.counts[ref])||0;
+  if(n !== have){
+    if(n === 0) delete area.counts[ref]; else area.counts[ref] = n;
+    saveMeta();
+    renderInventoryStats();
+    const lbl = document.getElementById('cntlbl-'+ref);
+    if(lbl) lbl.textContent = n + ' contados';
+    const tag = document.getElementById('areaCountedTag');
+    if(tag){ const refs = Object.keys(area.counts).filter(r=>area.counts[r]>0); const t = refs.reduce((s,r)=>s+(Number(area.counts[r])||0),0); tag.textContent = refs.length ? `· ${refs.length} artículo${refs.length===1?'':'s'} · ${t} unidad${t===1?'':'es'}` : ''; }
+    const p = PRODUCTS_BY_REF[ref];
+    showToast(n === 0 ? `${p?p.title:ref} quitado del conteo.` : `Cantidad contada de ${p?p.title:ref}: ${n}`);
+  }
+  if(rerender || n === 0) setTimeout(renderCountedItemsList, 0);   // se redibuja al salir de la casilla
 }
 function removeFromCount(ref, qtyToRemove){
   const area = activeArea();
