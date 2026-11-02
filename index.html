@@ -1693,7 +1693,7 @@ body{overflow-x:hidden;}
   </div>
 </div>
 
-<div id="cloudSyncBadge" style="display:none;position:fixed;left:12px;bottom:12px;z-index:99999;color:#fff;font:600 12px/1 system-ui,sans-serif;padding:7px 11px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.25);pointer-events:auto;cursor:pointer;" onclick="configureGithubSync()"></div>
+<div id="cloudSyncBadge" style="display:none;position:fixed;left:12px;bottom:12px;z-index:99999;color:#fff;font:600 12px/1 system-ui,sans-serif;padding:7px 11px;border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.25);pointer-events:auto;cursor:pointer;" onclick="onSyncBadgeClick()"></div>
 <!-- ===== Sincronización en la nube (Firebase / Firestore) ===== -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
@@ -1711,6 +1711,15 @@ body{overflow-x:hidden;}
    El token NO va aquí (la página es pública): se pide una sola vez en cada
    ordenador al hacer clic en el indicador de abajo a la izquierda.
    ════════════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════════
+   SERVIDOR DE TU PC (principal)
+   En Vercel se toma solo de la variable de entorno SERVIDOR_URL (vía /api/config).
+   Si abres la página desde otro lugar, puedes escribir la dirección aquí.
+   ════════════════════════════════════════════════════════════════════════ */
+window.EUROTRUCK_SERVER = {
+  url: ""   // ej. "https://desktop-bv2qia0.tu-red.ts.net"
+};
+
 window.GITHUB_SYNC = {
   owner: "",                 // tu usuario de GitHub, ej. "albertosamboy"
   repo: "",                  // repositorio de datos, ej. "eurotruck-datos"
@@ -2174,6 +2183,7 @@ function setSyncStatus(state, extra){
   if(!el) return;
   const map = {
     local:   ['💾 Solo en este equipo — inicia sesión para ponerlo en línea', '#7a7a7a', 'Esta PC aún no guarda en línea. Inicia sesión (si ya se subió acceso.json) o, si eres administrador, haz clic para configurarlo.'],
+    follower:['🔗 En línea mediante otra ventana', '#1f6f9d', 'Otra ventana de esta página ya está conectada en esta PC; esta recibe todo de ella al instante.'],
     saving:  ['☁️ Guardando…', '#c99400', 'Subiendo los cambios a la nube…'],
     ok:      ['☁️ Sincronizado', '#1f9d63', 'Todo está guardado en la nube y se ve en los demás ordenadores.'],
     offline: ['⚠️ Sin conexión — se subirá al volver', '#c0392b', 'Sin internet: los cambios quedan guardados y se suben solos al reconectar.'],
@@ -2605,6 +2615,7 @@ async function makeGithubDbApi(cfg){
         set(obj){
           const s = st(path);
           const snap = JSON.parse(JSON.stringify(obj));
+          if(!s.job && !s.inflight && s.base !== undefined && jsonEq(snap, s.base)) return Promise.resolve();
           s.dirty = true;
           idbPut(pendKey(path), snap);
           setSyncStatus(navigator.onLine ? 'saving' : 'offline');
@@ -2619,10 +2630,375 @@ async function makeGithubDbApi(cfg){
   };
 }
 
+/* ════════════════════════ SERVIDOR PROPIO (tu PC) ════════════════════════
+   La página guarda TODO en el servidor de tu PC: cada artículo es un registro propio
+   (crear / editar / eliminar), más cotizaciones, áreas de conteo, ventas y recepción.
+   Las demás PC reciben el aviso en vivo y se actualizan solas. Si se cae el internet,
+   todo queda en la base interna de esta PC y se sube solo al volver. */
+const SRV_KEY = 'eurotruck_server_v1';
+window.EUROTRUCK_SERVER = window.EUROTRUCK_SERVER || {url:''};
+function _srvLocal(){ try{ return JSON.parse(localStorage.getItem(SRV_KEY)||'{}'); }catch(e){ return {}; } }
+function srvSettings(){
+  const l = _srvLocal();
+  return {url: String(window.EUROTRUCK_SERVER.url || l.url || '').trim().replace(/\/+$/,''), token: l.token||'', usuario: l.usuario||''};
+}
+function srvSave(patch){ try{ localStorage.setItem(SRV_KEY, JSON.stringify(Object.assign(_srvLocal(), patch))); }catch(e){} }
+function serverConfigured(){ const s = srvSettings(); return !!(s.url && s.token); }
+let _srvConfigTried = false;
+// En Vercel, /api/config entrega la dirección del servidor (variable de entorno SERVIDOR_URL).
+async function loadServerConfig(){
+  if(_srvConfigTried || window.EUROTRUCK_SERVER.url || location.protocol === 'file:') return;
+  _srvConfigTried = true;
+  try{
+    const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 3000);
+    const r = await fetch('/api/config', {cache:'no-store', signal:ctl.signal}); clearTimeout(t);
+    if(r.ok){ const j = await r.json(); if(j && j.servidorUrl) window.EUROTRUCK_SERVER.url = j.servidorUrl; }
+  }catch(e){}
+}
+async function serverLogin(u, p){
+  await loadServerConfig();
+  const s = srvSettings();
+  if(!s.url) return {ok:false, reason:'sin-servidor'};
+  try{
+    const r = await fetch(s.url + '/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({usuario:u, clave:p, app:'eurotruck'})});
+    if(r.status === 401 || r.status === 403) return {ok:false, reason:'clave'};
+    if(!r.ok) return {ok:false, reason:'error'};
+    const j = await r.json();
+    srvSave({url:s.url, token:j.token, usuario:j.usuario});
+    return {ok:true, rol:j.rol, nombre:j.nombre};
+  }catch(e){ return {ok:false, reason:'red'}; }
+}
+async function serverLogout(){
+  const s = srvSettings();
+  if(dbApi && dbApi.stop) dbApi.stop();
+  if(dbApi && dbApi.kind === 'server') dbApi = null;
+  srvSave({token:''});
+  if(s.url && s.token){ try{ await fetch(s.url + '/api/logout', {method:'POST', headers:{'Authorization':'Bearer '+s.token}}); }catch(e){} }
+  setSyncStatus('local');
+}
+
+/* ---------- Una sola ventana por PC habla con el servidor ("líder") ----------
+   Las demás ventanas reciben todo de la líder al instante. Así nunca se cuenta
+   dos veces un mismo escaneo. Si se cierra la líder, otra toma su lugar sola. */
+let isSyncLeader = !('locks' in navigator);
+let _initDone = false;
+const leaderReady = new Promise(res=>{
+  if(!('locks' in navigator)) return res(true);
+  let settled = false;
+  navigator.locks.request('eurotruck-sync-leader', ()=>{
+    isSyncLeader = true;
+    if(!settled){ settled = true; res(true); }
+    else if(_initDone){ initData(); } // la ventana líder se cerró: esta toma su lugar
+    return new Promise(()=>{}); // mantener el candado mientras la ventana esté abierta
+  });
+  setTimeout(()=>{ if(!settled){ settled = true; res(false); } }, 500);
+});
+
+/* Documentos que no son artículos (se guardan enteros) */
+const SRV_DOCS = {
+  orders: {
+    get: ()=>({list: ordersState}),
+    set: d=>{ ordersState = (d && d.list) || []; try{ normalizeOrders(); }catch(e){} }
+  },
+  meta: {
+    get: ()=>({locations, deletedRefs, countAreas, activeAreaIndex, salesLog, internalCodes, nextInternalCode, receivingKardex, scanHistory,
+               usdRateInfo: usdRateManual ? {rate:usdRate, date:usdRateDate, manual:true} : null}),
+    set: d=>{
+      if(!d) return;
+      if(d.locations) locations = d.locations;
+      if(d.deletedRefs) deletedRefs = d.deletedRefs;
+      if(d.countAreas) countAreas = d.countAreas;
+      if(d.activeAreaIndex!==undefined) activeAreaIndex = d.activeAreaIndex;
+      if(d.salesLog) salesLog = d.salesLog;
+      if(d.internalCodes) internalCodes = d.internalCodes;
+      if(d.nextInternalCode!==undefined) nextInternalCode = d.nextInternalCode;
+      if(d.receivingKardex) receivingKardex = d.receivingKardex;
+      if(d.scanHistory) scanHistory = d.scanHistory;
+      if(d.usdRateInfo && d.usdRateInfo.rate){ usdRate = Number(d.usdRateInfo.rate); usdRateDate = d.usdRateInfo.date||''; usdRateManual = true; try{ saveUsdRateToStorage(); }catch(e){} }
+    }
+  },
+  receiving: {
+    get: ()=>({items: receivingSession, startedAt: receivingSessionStartedAt}),
+    set: d=>{ receivingSession = (d && d.items) || []; receivingSessionStartedAt = (d && d.startedAt) || null; }
+  }
+};
+// Un registro de inventario "vacío" (recién creado solo para mostrar) no se sube.
+function isUntouchedInvRow(ref, row){
+  try{
+    const d = defaultInvRow(ref); d.altCodes = Array.isArray(d.altCodes) ? d.altCodes : []; mergeSeededAltCodes(ref, d);
+    return JSON.stringify(row) === JSON.stringify(d);
+  }catch(e){ return false; }
+}
+
+async function makeServerDbApi(cfg){
+  const BASE = cfg.url + '/api/eurotruck';
+  const syncKey = 'srv_sync:' + cfg.url;
+  let stopped = false, es = null, pullTimer = null, flushTimer = null, periodic = null;
+  let pulling = false, pullAgain = false, flushing = false, flushAgain = false;
+
+  async function api(method, p, body){
+    let r;
+    try{
+      r = await fetch(BASE + p, {method, cache:'no-store', headers:{'Authorization':'Bearer '+cfg.token, 'Content-Type':'application/json', 'X-Equipo':SYNC_CLIENT_ID}, body: body === undefined ? undefined : JSON.stringify(body)});
+    }catch(e){ const err = new Error('Sin conexión con el servidor'); err.offline = true; throw err; }
+    if(r.status === 401){ const err = new Error('La sesión del servidor venció: vuelve a iniciar sesión'); err.auth = true; throw err; }
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok && r.status !== 409) throw new Error(j.error || ('Servidor respondió ' + r.status));
+    return j;
+  }
+  // Verificar conexión y sesión antes de empezar
+  await api('GET', '/docs?desde=999999999999');
+
+  // Estado sincronizado: lo último que esta PC sabe que está en el servidor ("base")
+  let S = await idbGet(syncKey);
+  const firstSync = !S;
+  if(!S) S = {seqInv:0, seqDocs:0, inv:{}, docs:{}};
+  let saveSTimer = null;
+  const saveS = ()=>{ clearTimeout(saveSTimer); saveSTimer = setTimeout(()=> idbPut(syncKey, S), 300); };
+  const parse = s => s === undefined ? undefined : JSON.parse(s);
+
+  function afterRemoteChange(){
+    try{ rerenderAllViews(); }catch(e){}
+    try{ saveLocalFallback(); }catch(e){} // copia local + avisar a las otras ventanas
+  }
+
+  /* ---------- BAJAR cambios del servidor ---------- */
+  async function pull(){
+    if(stopped) return;
+    if(pulling){ pullAgain = true; return; }
+    pulling = true;
+    let changed = false;
+    try{
+      const inv = await api('GET', '/inventario?desde=' + S.seqInv);
+      const remoteEmpty = S.seqInv === 0 && !inv.rows.length;
+      for(const row of inv.rows){
+        const b = S.inv[row.id];
+        if(b && b.v >= row.version) continue; // es nuestro propio cambio
+        const local = inventoryState[row.id];
+        const localStr = local === undefined ? undefined : JSON.stringify(local);
+        if(row.deleted){
+          if(!b) continue;
+          if(local === undefined || localStr === b.s){ delete inventoryState[row.id]; changed = true; }
+          delete S.inv[row.id]; // si aquí se editó, se vuelve a crear al subir
+          continue;
+        }
+        let next;
+        if(b && localStr !== undefined && localStr !== b.s) next = merge3(parse(b.s), local, row.data);       // editado aquí y allá: combinar
+        else if(!b && local !== undefined && !firstSync && !isUntouchedInvRow(row.id, local)) next = merge3(undefined, local, row.data);
+        else next = row.data;                                                                                   // tomar lo del servidor
+        inventoryState[row.id] = next;
+        S.inv[row.id] = {v: row.version, s: JSON.stringify(row.data)};
+        changed = true;
+      }
+      S.seqInv = inv.seq;
+      if(firstSync && !remoteEmpty){
+        // PC nueva conectándose a un servidor que ya tiene datos: lo del servidor manda
+        Object.keys(inventoryState).forEach(ref=>{ if(!S.inv[ref]){ delete inventoryState[ref]; changed = true; } });
+      }
+      const docs = await api('GET', '/docs?desde=' + S.seqDocs);
+      for(const row of docs.rows){
+        const h = SRV_DOCS[row.id]; if(!h) continue;
+        const b = S.docs[row.id];
+        if(b && b.v >= row.version) continue;
+        if(row.deleted) continue;
+        const local = h.get(); const localStr = JSON.stringify(local);
+        let next;
+        if(b && localStr !== b.s) next = merge3(parse(b.s), local, row.data);
+        else next = row.data;
+        h.set(JSON.parse(JSON.stringify(next)));
+        S.docs[row.id] = {v: row.version, s: JSON.stringify(row.data)};
+        changed = true;
+      }
+      S.seqDocs = docs.seq;
+      saveS();
+      if(changed) afterRemoteChange();
+      if(navigator.onLine) setSyncStatus(hasPending() ? 'saving' : 'ok');
+    }catch(e){
+      onError(e);
+    }finally{
+      pulling = false;
+      if(pullAgain){ pullAgain = false; schedulePull(50); }
+    }
+    scheduleFlush(200); // subir lo que esté pendiente (o combinado)
+  }
+  function schedulePull(ms){ clearTimeout(pullTimer); pullTimer = setTimeout(pull, ms === undefined ? 150 : ms); }
+
+  /* ---------- SUBIR cambios de esta PC ---------- */
+  function invOps(){
+    const ops = [];
+    for(const ref of Object.keys(inventoryState)){
+      const row = inventoryState[ref]; const s = JSON.stringify(row); const b = S.inv[ref];
+      if(b && b.s === s) continue;
+      if(!b && isUntouchedInvRow(ref, row)) continue;
+      ops.push({op:'put', id:ref, data:row, version: b ? b.v : 0, _s:s});
+    }
+    for(const ref of Object.keys(S.inv)) if(!(ref in inventoryState)) ops.push({op:'delete', id:ref});
+    return ops;
+  }
+  function hasPending(){
+    if(invOps().length) return true;
+    return Object.keys(SRV_DOCS).some(n=>{ const b = S.docs[n]; return !b || b.s !== JSON.stringify(SRV_DOCS[n].get()); });
+  }
+  async function flush(){
+    if(stopped) return;
+    if(flushing){ flushAgain = true; return; }
+    flushing = true;
+    let remoteMerged = false;
+    try{
+      for(let pass = 0; pass < 5; pass++){
+        const ops = invOps();
+        let conflicts = 0;
+        for(let i = 0; i < ops.length; i += 300){
+          const chunk = ops.slice(i, i + 300);
+          const res = await api('POST', '/inventario/_lote', {ops: chunk.map(o=>({op:o.op, id:o.id, data:o.data, version:o.version}))});
+          res.results.forEach((r, k)=>{
+            const o = chunk[k];
+            if(r.ok){
+              if(o.op === 'delete') delete S.inv[o.id]; else S.inv[o.id] = {v:r.version, s:o._s};
+            } else if(r.conflict){
+              conflicts++;
+              const cur = r.current;
+              if(!cur || cur.deleted){ delete S.inv[o.id]; return; } // lo borraron allá: se vuelve a crear con lo de aquí
+              const local = inventoryState[o.id];
+              const b = S.inv[o.id];
+              if(local !== undefined) inventoryState[o.id] = merge3(b ? parse(b.s) : undefined, local, cur.data);
+              S.inv[o.id] = {v:cur.version, s:JSON.stringify(cur.data)};
+              remoteMerged = true;
+            }
+          });
+          saveS();
+        }
+        for(const name of Object.keys(SRV_DOCS)){
+          const h = SRV_DOCS[name];
+          const local = h.get(); const s = JSON.stringify(local); const b = S.docs[name];
+          if(b && b.s === s) continue;
+          const r = await api('PUT', '/docs/' + name, {data: local, version: b ? b.v : 0});
+          if(r.ok){ S.docs[name] = {v:r.version, s}; }
+          else if(r.conflict){
+            conflicts++;
+            const cur = r.current;
+            if(cur && !cur.deleted){
+              h.set(merge3(b ? parse(b.s) : undefined, JSON.parse(s), cur.data));
+              S.docs[name] = {v:cur.version, s:JSON.stringify(cur.data)};
+              remoteMerged = true;
+            } else { delete S.docs[name]; }
+          }
+          saveS();
+        }
+        if(!conflicts) break;
+      }
+      if(remoteMerged) afterRemoteChange();
+      setSyncStatus(hasPending() ? 'saving' : 'ok');
+    }catch(e){
+      onError(e);
+      clearTimeout(flushTimer); flushTimer = setTimeout(flush, 5000);
+    }finally{
+      flushing = false;
+      if(flushAgain){ flushAgain = false; scheduleFlush(100); }
+    }
+  }
+  function scheduleFlush(ms){ clearTimeout(flushTimer); flushTimer = setTimeout(flush, ms === undefined ? 350 : ms); }
+
+  function onError(e){
+    console.warn('Servidor:', e && e.message);
+    if(e && e.auth){ setSyncStatus('error', e.message); showToast(e.message); return; }
+    setSyncStatus(e && e.offline ? 'offline' : 'error', e && e.message);
+  }
+
+  /* ---------- avisos en vivo ---------- */
+  function connectEvents(){
+    if(stopped || !('EventSource' in window)) return;
+    try{ if(es) es.close(); }catch(e){}
+    es = new EventSource(BASE + '/eventos?token=' + encodeURIComponent(cfg.token));
+    es.onopen = ()=> schedulePull(0);
+    es.onmessage = ev=>{
+      let m = {}; try{ m = JSON.parse(ev.data); }catch(e){}
+      if(m.hello){ schedulePull(0); return; }
+      if(m.by && m.by === SYNC_CLIENT_ID) return; // cambio hecho por esta misma PC
+      schedulePull(120);
+    };
+    es.onerror = ()=>{ if(!navigator.onLine) setSyncStatus('offline'); };
+  }
+  const onOnline = ()=>{ schedulePull(0); };
+  const onVisible = ()=>{ if(!document.hidden) schedulePull(0); };
+  window.addEventListener('online', onOnline);
+  document.addEventListener('visibilitychange', onVisible);
+
+  const api_ = {
+    kind: 'server',
+    url: cfg.url, token: cfg.token,
+    async start(){
+      await pull();
+      await flush();
+      connectEvents();
+      periodic = setInterval(()=>{ schedulePull(0); }, 30000); // revisión de respaldo cada 30 s
+    },
+    stop(){
+      stopped = true;
+      try{ if(es) es.close(); }catch(e){}
+      clearInterval(periodic); clearTimeout(pullTimer); clearTimeout(flushTimer);
+      window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisible);
+    },
+    flushNow(){ scheduleFlush(0); },
+    doc(path){
+      const name = path.split('/').pop();
+      return {
+        async get(){ return name === 'inventory' ? inventoryState : (SRV_DOCS[name] ? SRV_DOCS[name].get() : {}); },
+        set(){ setSyncStatus(navigator.onLine ? 'saving' : 'offline'); scheduleFlush(); return Promise.resolve(); },
+        onSnapshot(){ return ()=>{}; }
+      };
+    }
+  };
+  return api_;
+}
+
+/* ---------- Artículos nuevos: su ficha viaja dentro del registro de inventario ---------- */
+function restoreCustomProducts(){
+  for(const ref of Object.keys(inventoryState)){
+    const row = inventoryState[ref];
+    if(!row || !row.product) continue;
+    const pr = row.product;
+    let p = PRODUCTS_BY_REF[ref];
+    if(!p){
+      p = {ref, sku:ref, title:pr.title||ref, brand:pr.brand||'DT Spare Parts', cat:pr.cat||'Repuesto', pack:'1 PCS', gtin:pr.gtin||'', url:'', refsList:[], marca:MARCA_FIJA, img:pr.img||'', applications:pr.applications||'', sourceUrl:PORTAL_URL, _custom:true};
+      products.push(p); PRODUCTS_BY_REF[ref] = p;
+    } else if(p._custom){
+      Object.assign(p, {title:pr.title||ref, brand:pr.brand||p.brand, cat:pr.cat||p.cat, gtin:pr.gtin||'', img:pr.img||'', applications:pr.applications||''});
+    }
+  }
+  // artículos propios que se eliminaron en otra PC
+  for(let i = products.length - 1; i >= 0; i--){
+    const p = products[i];
+    if(p._custom && !(inventoryState[p.ref] && inventoryState[p.ref].product)){ products.splice(i, 1); delete PRODUCTS_BY_REF[p.ref]; }
+  }
+}
+
 async function initData(){
   loadLocalFallback();
   try{ assignAppState(await idbGet('state')); }catch(e){}
   normalizeOrders();
+  await loadServerConfig();
+  // Solo una ventana por PC se conecta; las demás reciben todo de ella.
+  if(!((await leaderReady) || isSyncLeader)){ if(dbApi && dbApi.stop) dbApi.stop(); dbApi = null; setSyncStatus('follower'); renderProducts(); _initDone = true; return; }
+  if(serverConfigured()){
+    const sc = srvSettings();
+    if(dbApi && dbApi.kind === 'server' && dbApi.token === sc.token && dbApi.url === sc.url){ renderProducts(); _initDone = true; return; }
+    if(dbApi && dbApi.stop) dbApi.stop();
+    dbApi = null;
+    try{
+      const api = await makeServerDbApi(sc);
+      dbApi = api;
+      await api.start();
+    }catch(err){
+      if(dbApi && dbApi.stop) dbApi.stop();
+      dbApi = null;
+      setSyncStatus(err && err.offline ? 'offline' : 'error', err && err.message);
+      if(err && err.auth){ srvSave({token:''}); }
+      else setTimeout(()=>{ if(!dbApi && serverConfigured()) initData(); }, 15000); // reintentar cuando vuelva la conexión
+    }
+    renderProducts(); _initDone = true; return;
+  }
   try{
     if(githubConfigured()){
       try{
@@ -2641,6 +3017,7 @@ async function initData(){
     }
   }catch(e){ dbApi = null; }
   if(!dbApi && !githubConfigured()) setSyncStatus('local');
+  _initDone = true;
   if(dbApi){
     try{
       const invDoc = await dbApi.doc('eurotruck/inventory').get();
@@ -2762,6 +3139,7 @@ function productCardHtml(p){
 }
 
 function renderProducts(){
+  try{ restoreCustomProducts(); }catch(e){}
   const grid = document.getElementById('productGrid');
   const filtered = getFilteredProducts();
   document.getElementById('catalogCount').textContent = currentLang==='en' ? (filtered.length + ' item' + (filtered.length===1?'':'s')) : (filtered.length + ' artículo' + (filtered.length===1?'':'s'));
@@ -3140,7 +3518,8 @@ function restoreSession(){
     const raw = localStorage.getItem(SESSION_KEY);
     if(!raw) return;
     const parsed = JSON.parse(raw);
-    if(parsed && parsed.username && USERS[parsed.username] && USERS[parsed.username].role === parsed.role){
+    const sv = srvSettings();
+    if(parsed && parsed.username && ((USERS[parsed.username] && USERS[parsed.username].role === parsed.role) || (sv.token && sv.usuario === parsed.username))){
       currentUser = parsed;
       updateAuthUI();
     }
@@ -3182,6 +3561,7 @@ async function unwrapTeamKey(u, p){
 // "acceso.json" (publicado junto al index) y descifrándolo con la contraseña del usuario.
 async function autoConnectOnlineSave(u, p){
   try{
+    if(serverConfigured()) return;
     if(githubConfigured() && dbApi) return;
     const r = await fetch('acceso.json?t='+Date.now(), {cache:'no-store'});
     if(!r.ok) return;
@@ -3198,9 +3578,12 @@ async function handleLogin(e){
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
   const rec = USERS[u];
-  if(rec && await verifyPassword(u, p)){
-    autoConnectOnlineSave(u, p);
-    currentUser = {username:u, role:rec.role};
+  const srv = await serverLogin(u, p);                 // 1) el servidor de tu PC decide si está disponible
+  const localOk = !!(rec && await verifyPassword(u, p)); // 2) sin conexión: clave guardada en la página
+  if(srv.ok || (srv.reason !== 'clave' && localOk)){
+    if(srv.ok) initData(); else autoConnectOnlineSave(u, p);
+    if(!srv.ok && srv.reason === 'red') setTimeout(()=>showToast('Sin conexión con el servidor: se trabaja local y se sube al volver.'), 3300);
+    currentUser = {username:u, role: srv.rol || (rec && rec.role) || 'staff'};
     saveSession();
     document.getElementById('loginForm').reset();
     closeLogin();
@@ -3227,6 +3610,7 @@ async function handleLogin(e){
 function logout(){
   currentUser = null;
   clearSession();
+  serverLogout();
   updateAuthUI();
   closeOrdersWindow();
   closeInventoryWindow();
@@ -4366,7 +4750,12 @@ function deleteArticle(ref){
   if(!deletedRefs.includes(ref)) deletedRefs.push(ref);
   countAreas.forEach(area=>{ if(area.counts && area.counts[ref]!==undefined) delete area.counts[ref]; });
   const row = inventoryState[ref];
-  if(row) row.stock = 0;
+  if(row && row.product){
+    // artículo creado por ustedes: se borra el registro completo (en todas las PC)
+    delete inventoryState[ref];
+    const i = products.findIndex(p=>p.ref===ref); if(i>=0) products.splice(i,1);
+    delete PRODUCTS_BY_REF[ref];
+  } else if(row) row.stock = 0;
   saveInventory();
   saveMeta();
   renderCatalogCards();
@@ -4550,10 +4939,12 @@ function submitNewArticle(){
   const costVal = costEl ? costEl.value : '';
   const priceVal = document.getElementById('newArtPrice').value;
 
-  const newP = {ref, sku:ref, title, brand, cat, pack:'1 PCS', gtin, url:'', refsList:[], marca:MARCA_FIJA, img:newArticleImageData||'', applications, sourceUrl: PORTAL_URL};
+  const newP = {ref, sku:ref, title, brand, cat, pack:'1 PCS', gtin, url:'', refsList:[], marca:MARCA_FIJA, img:newArticleImageData||'', applications, sourceUrl: PORTAL_URL, _custom:true};
   products.push(newP);
   PRODUCTS_BY_REF[ref] = newP;
   const inv = getInv(ref);
+  // la ficha del artículo se guarda con su registro, para que exista en todas las PC
+  inv.product = {title, brand, cat, applications, gtin, img: newArticleImageData||'', creado: new Date().toISOString(), por: currentUser ? currentUser.username : ''};
   inv.stock = stock;
   inv.cost = costVal===''?'':Number(costVal);
   inv.price = priceVal===''?'':Number(priceVal);
@@ -5993,6 +6384,22 @@ function broadcastTabState(){
     try{ tabChannel.postMessage({from:TAB_ID, type:'state', state:collectTabState()}); }catch(e){ console.warn('Sync ventanas:', e && e.message); }
   }, 80);
 }
+async function onSyncBadgeClick(){
+  await loadServerConfig();
+  const s = srvSettings();
+  if(!s.url){
+    if(githubConfigured()){ configureGithubSync(); return; }
+    if(!currentUser || currentUser.role !== 'admin'){ showToast('Inicia sesión como administrador para conectar el servidor.'); openLogin(); return; }
+    const url = prompt('Dirección de tu servidor (la que mostró el instalador, ej. https://desktop-bv2qia0.xxxx.ts.net):', '');
+    if(!url) return;
+    srvSave({url: url.trim().replace(/\/+$/,''), token:''});
+    currentUser = null; clearSession(); updateAuthUI();
+    showToast('Ahora inicia sesión para conectar con el servidor.'); openLogin(); return;
+  }
+  if(!s.token){ currentUser = null; clearSession(); updateAuthUI(); showToast('Inicia sesión para conectar con el servidor.'); openLogin(); return; }
+  if(dbApi && dbApi.kind === 'server'){ dbApi.flushNow(); showToast('Conectado a ' + s.url); return; }
+  initData();
+}
 function rerenderAllViews(){
   const isOpen = id => { const el = document.getElementById(id); return !!(el && el.classList.contains('is-open')); };
   const run = fn => { try{ if(typeof fn === 'function') fn(); }catch(e){} };
@@ -6013,6 +6420,11 @@ function applyTabState(st){
       internalCodes, nextInternalCode, receivingKardex, receivingSession, receivingSessionStartedAt,
       scanHistory, usdRate, usdRateDate, usdRateManual} = st);
     rerenderAllViews();
+    // La ventana líder sube al servidor lo que se hizo en las otras ventanas
+    if(isSyncLeader && dbApi){
+      if(dbApi.kind === 'server') dbApi.flushNow();
+      else { saveInventory(); saveOrders(); saveMeta(); try{ dbApi.doc('eurotruck/receiving').set({items:receivingSession, startedAt:receivingSessionStartedAt}); }catch(e){} }
+    }
   }finally{ applyingTabState = false; }
 }
 if(tabChannel){
@@ -6033,6 +6445,12 @@ window.addEventListener('storage', ev=>{
   if(ev.key === SESSION_KEY){
     if(!ev.newValue){ if(currentUser){ currentUser = null; updateAuthUI(); closeOrdersWindow(); closeInventoryWindow(); closeReceivingPanel(); } }
     else { restoreSession(); updateAuthUI(); }
+    return;
+  }
+  if(ev.key === SRV_KEY){
+    const sv = srvSettings();
+    if(!sv.token && dbApi && dbApi.kind === 'server'){ dbApi.stop(); dbApi = null; setSyncStatus('local'); }
+    else if(sv.token && isSyncLeader && !(dbApi && dbApi.kind === 'server')) initData();
     return;
   }
   if(ev.key === GH_TOKEN_KEY){ if(!dbApi && githubConfigured()) initData(); return; }
