@@ -87,6 +87,7 @@ nav button.on span{transform:scale(1.1)}
 .la-kick{color:#fbbf24;font-weight:900;font-size:19px}.la-prod{display:flex;gap:10px;align-items:center}.la-prod img{width:54px;height:54px;object-fit:contain;background:#0b1120;border-radius:8px}.la-prod b{display:block}
 .la-big{font-size:30px;font-weight:900;color:#fde68a;background:#1f1300;border:2px dashed #f59e0b;border-radius:12px;padding:12px;line-height:1.1}
 .la-box .big small{display:block;font-weight:500;font-size:12px;opacity:.85}.la-take{background:#d97706 !important;color:#fff}.la-both{background:#2563eb !important;color:#fff}.la-move{background:#374151 !important;color:#fff}
+.etp{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;color:#9fb0d0}.etp input{width:20px;height:20px}
 .pricebox{margin-top:14px;background:#0b1430;border:1px solid #1e3a8a;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .pricebox .pbt{font-weight:800}.pricebox label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#9fb0d0}
 .pricebox input{font-size:20px;padding:12px;border-radius:10px;border:1px solid var(--line);background:#060b18;color:#fff}
@@ -159,6 +160,7 @@ nav button.on span{transform:scale(1.1)}
         <button class="cam" data-cam="inv" title="Escanear con la cámara">📷</button><button class="foto" data-foto title="Tomar foto del código">📸</button>
       </div>
       <div class="qty"><button data-q="-1">−</button><input id="qtyInv" type="number" min="1" value="1"><button data-q="1">＋</button><span>unidades por lectura</span></div>
+      <label class="etp"><input type="checkbox" class="et-autoprint" onchange="etSetAutoPrint(this.checked)"> 🖨 Imprimir etiqueta Zebra (SKU grande) al registrar cada SKU</label>
     </div>
     <div class="card" id="lastInv" style="display:none"></div>
     <div class="card">
@@ -177,6 +179,7 @@ nav button.on span{transform:scale(1.1)}
         <button class="cam" data-cam="rec" title="Escanear con la cámara">📷</button><button class="foto" data-foto title="Tomar foto del código">📸</button>
       </div>
       <div class="qty"><button data-q="-1">−</button><input id="qtyRec" type="number" min="1" value="1"><button data-q="1">＋</button><span>unidades por lectura</span></div>
+      <label class="etp"><input type="checkbox" class="et-autoprint" onchange="etSetAutoPrint(this.checked)"> 🖨 Imprimir etiqueta Zebra (SKU grande) al registrar cada SKU</label>
     </div>
     <div class="card" id="lastRec" style="display:none"></div>
     <div class="card">
@@ -484,10 +487,12 @@ function handleCode(code, source){
     // lugares donde ya está: ubicaciones guardadas + áreas donde está contado sin cerrar
     const lugares = locsOf(row); ((v.meta && v.meta.countAreas) || []).forEach(x=>{ const k = x.tramo + '/' + x.estante; if(x.counts && Number(x.counts[p.ref]) > 0 && !lugares.includes(k)) lugares.push(k); });
     if(lugares.length && !lugares.includes(here) && !yaAqui){ op.primera = lugares[0]; showLocAlert(p, {location:lugares[0], extraLocations:lugares.slice(1)}, here, op); return; }
-    queue(op); beep(true); showLast('inv', p);
+    queue(op); beep(true); showLast('inv', p); if(!yaAqui && etAutoPrintOn()) etPrintSku(p.ref, true);
   } else if(currentTab === 'rec'){
     const qty = Math.max(1, Number($('qtyRec').value)||1);
+    const yaRec = ((view().rec && view().rec.items) || []).some(x=>x.ref === p.ref && x.qty > 0);
     queue({t:'recv', ref:p.ref, qty, at: now.toISOString()});
+    if(!yaRec && etAutoPrintOn()) etPrintSku(p.ref, true);
     beep(true); showLast('rec', p);
   }
 }
@@ -505,7 +510,31 @@ function showLocAlert(p, row, here, op){
   ov.classList.add('on'); alertBeep();
   ov.onclick = e=>{ const b = e.target.closest('[data-la]'); if(!b) return; const mode = b.dataset.la; const o = locAlertOp; locAlertOp = null; ov.classList.remove('on');
     if(mode === 'take'){ toast('Llévalo a ' + locsLabel(row), 'ok'); return; }
-    o.locMode = mode; queue(o); beep(true); showLast('inv', BY_REF[o.ref]); };
+    o.locMode = mode; queue(o); beep(true); showLast('inv', BY_REF[o.ref]); if(etAutoPrintOn()) etPrintSku(o.ref, true); };
+}
+/* ===== Etiqueta Zebra LP 2824 Plus (2" x 1", 203 dpi = 406 x 203 puntos): SKU en grande ===== */
+function etAscii(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\x20-\x7E]/g,'').replace(/[\^~\\]/g,' ').trim(); }
+function etSkuLabelZpl(sku, title){
+  sku = etAscii(sku) || '?'; const n = sku.length;
+  const w = Math.max(34, Math.min(140, Math.floor(384 / (n * 0.66))));   // ancho de letra para que quepa en 2"
+  const h = 140;                                                         // alto de letra (grande)
+  const name = etAscii(title).slice(0, 34);
+  return ['^XA','^CI0','^PW406','^LL203','^LH0,0','^PR3',
+    `^FO8,12^FB390,1,0,C,0^A0N,${h},${w}^FD${sku}^FS`,
+    name ? `^FO8,166^FB390,1,0,C,0^A0N,26,22^FD${name}^FS` : '',
+    '^PQ1,0,1,Y','^XZ'].filter(Boolean).join('\n');
+}
+function etAutoPrintOn(){ try{ return localStorage.getItem('et_autoprint') !== 'off'; }catch(e){ return true; } }
+function etSetAutoPrint(on){ try{ localStorage.setItem('et_autoprint', on ? 'on' : 'off'); }catch(e){} document.querySelectorAll('.et-autoprint').forEach(c=>c.checked = !!on); }
+
+async function etPrintSku(ref, auto){
+  const p = BY_REF[ref]; if(!p) return;
+  if(!cfg.token || !navigator.onLine){ if(!auto) toast('Para imprimir necesitas internet y sesión iniciada.', 'bad'); return; }
+  try{
+    const r = await fetch(cfg.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({zpl: etSkuLabelZpl(p.ref, p.title)})});
+    const j = await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error || ('error ' + r.status));
+    if(!auto) toast('🖨 Etiqueta impresa: ' + p.ref, 'ok');
+  }catch(e){ beep(false); toast('🖨 No se pudo imprimir: ' + e.message, 'bad'); }
 }
 function showLast(kind, p){
   const v = view(); let n = 0, label = '';
@@ -869,6 +898,7 @@ function openDetail(ref){
       <label>Precio final (US$)<input id="pfPrice" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(row.price ?? '')}" placeholder="0.00"></label>
       ${canCost() ? `<div class="mut" id="pfMargin"></div>` : ''}
       <button class="pri big" id="pfSave" data-ref="${esc(ref)}">Guardar costo y precio</button></div>` : ''}
+    ${isAdmin() ? `<button class="big" style="margin-top:12px" onclick="etPrintSku('${esc(ref)}')">🖨 Imprimir etiqueta (SKU grande)</button>` : ''}
     ${historyHtml(ref, v)}
     <button class="big" style="margin-top:14px" onclick="document.getElementById('sheet').classList.remove('on')">Cerrar</button>`;
   $('sheet').classList.add('on');
@@ -992,6 +1022,7 @@ $('closeInv').onclick = ()=>closeEntry('inv');
 $('closeRec').onclick = ()=>closeEntry('rec');
 $('lbtn').onclick = doLogin;
 $('gbtn').onclick = ()=> startGuest();
+document.querySelectorAll('.et-autoprint').forEach(c=>c.checked = etAutoPrintOn());
 let _moreObs = ('IntersectionObserver' in window) ? new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting && e.target.id === 'busMore' && currentTab === 'bus'){ busShown += 60; doSearch(true); } }); }, {rootMargin:'0px 0px 300px 0px'}) : null;
 new MutationObserver(()=>{ const b = document.getElementById('busMore'); if(b && _moreObs && !b._obs){ b._obs = 1; _moreObs.observe(b); } }).observe(document.getElementById('listBus'), {childList:true}); $('lp').addEventListener('keydown', e=>{ if(e.key === 'Enter') doLogin(); });
 document.querySelectorAll('button.cam').forEach(b=> b.onclick = ()=>{ if(camOn) stopCam(); else startCam(); });

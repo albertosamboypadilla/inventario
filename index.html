@@ -969,6 +969,7 @@ button{font-family:inherit;}
 
 /* ===== FICHA DE ARTÍCULO (detalle al tocar un artículo del catálogo) ===== */
 #articleDetailOverlay,#addArticleOverlay{z-index:95;}
+.et-print-toggle{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 4px;font-size:.8rem;color:#c1d8ff}.et-print-toggle label{display:flex;gap:6px;align-items:center;cursor:pointer}
 #locAlertOverlay{position:fixed;inset:0;z-index:99990;background:rgba(40,10,0,.78);display:none;align-items:center;justify-content:center;padding:20px}
 #locAlertOverlay.is-open{display:flex;animation:laFlash .5s ease-in-out 3}
 @keyframes laFlash{50%{background:rgba(120,50,0,.85)}}
@@ -4466,7 +4467,9 @@ function registerScan(code, qty, decided){
     if(otras.length){ showLocationAlert(p, qty, area); return; }
   }
   if(!inv.location && area.tramo && area.estante) inv.location = here;
+  const esNuevoAqui = !(Number(area.counts[p.ref]) > 0);
   area.counts[p.ref] = (Number(area.counts[p.ref])||0) + qty;
+  if(esNuevoAqui && etAutoPrintOn()) etPrintSku(p.ref, true);
   lastAddedRef = p.ref;
   scanHistory.unshift({time:new Date().toLocaleTimeString('es-DO',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), ref:p.ref, title:p.title, stock:inv.stock, qty});
   scanHistory = scanHistory.slice(0,50);
@@ -4635,7 +4638,7 @@ function submitReceivingScan(code){
   if(!receivingSession.length) receivingSessionStartedAt = new Date().toISOString(); // trigger inicial: primera lectura abre la sesión
   let row = receivingSession.find(r=>r.ref===p.ref);
   if(row){ row.qty = (Number(row.qty)||0) + 1; }
-  else { row = {ref:p.ref, qty:1}; receivingSession.push(row); }
+  else { row = {ref:p.ref, qty:1}; receivingSession.push(row); if(etAutoPrintOn()) etPrintSku(p.ref, true); }
   saveReceivingSessionDraft();
   renderReceivingSession();
   playAddSound();
@@ -5411,6 +5414,7 @@ function renderArticleDetail(){
         </div>
         <div class="art-actions-row">
           ${currentUser && currentUser.role==='admin' ? `<button class="mini-btn mini-btn--wa" onclick="const s=document.getElementById('artEditSection'); s.scrollIntoView({behavior:'smooth',block:'start'}); setTimeout(()=>document.getElementById('artEdTitle').focus(),300)">✏️ Editar artículo</button>` : ''}
+          <button class="mini-btn" onclick="etPrintSku('${ref}')">🖨 Imprimir SKU grande</button>
           <button class="mini-btn" onclick="document.getElementById('artAddGtinInput').focus()">Agregar otro GTIN</button>
           <button class="mini-btn mini-btn--del" onclick="deleteArticleFromDetail('${ref}')">Eliminar artículo completo</button>
         </div>
@@ -5692,6 +5696,51 @@ function renderZplPreview(){
     ${zplConfig.showName ? `<div class="zpl-label-name">${p.title}</div>` : ''}
   </div>`;
 }
+/* ===== Etiqueta Zebra LP 2824 Plus (2" x 1", 203 dpi = 406 x 203 puntos): SKU en grande ===== */
+function etAscii(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\x20-\x7E]/g,'').replace(/[\^~\\]/g,' ').trim(); }
+function etSkuLabelZpl(sku, title){
+  sku = etAscii(sku) || '?'; const n = sku.length;
+  const w = Math.max(34, Math.min(140, Math.floor(384 / (n * 0.66))));   // ancho de letra para que quepa en 2"
+  const h = 140;                                                         // alto de letra (grande)
+  const name = etAscii(title).slice(0, 34);
+  return ['^XA','^CI0','^PW406','^LL203','^LH0,0','^PR3',
+    `^FO8,12^FB390,1,0,C,0^A0N,${h},${w}^FD${sku}^FS`,
+    name ? `^FO8,166^FB390,1,0,C,0^A0N,26,22^FD${name}^FS` : '',
+    '^PQ1,0,1,Y','^XZ'].filter(Boolean).join('\n');
+}
+function etAutoPrintOn(){ try{ return localStorage.getItem('et_autoprint') !== 'off'; }catch(e){ return true; } }
+function etSetAutoPrint(on){ try{ localStorage.setItem('et_autoprint', on ? 'on' : 'off'); }catch(e){} document.querySelectorAll('.et-autoprint').forEach(c=>c.checked = !!on); }
+
+async function etPrintSku(ref, auto){
+  const p = PRODUCTS_BY_REF[ref]; if(!p) return;
+  const sv = srvSettings();
+  if(!sv.url || !sv.token){ if(!auto){ playErrorSound(); showToast('Para imprimir hay que iniciar sesión (conectado al servidor).'); } return; }
+  try{
+    const r = await fetch(sv.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + sv.token}, body: JSON.stringify({zpl: etSkuLabelZpl(p.sku || p.ref, p.title)})});
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error || ('error ' + r.status));
+    if(!auto) showToast('🖨 Etiqueta impresa: ' + (p.sku || p.ref));
+  }catch(e){ playErrorSound(); showToast('🖨 No se pudo imprimir la etiqueta: ' + e.message); }
+}
+function etMountToggles(){
+  [['scanInput','inventario'],['receivingScanInput','recepción']].forEach(([id, donde])=>{
+    const inp = document.getElementById(id); if(!inp || document.getElementById('etTg_' + id)) return;
+    const box = inp.closest('.scan-box, .scan-row, div') || inp.parentElement; const host = box.parentElement || box;
+    const d = document.createElement('div'); d.id = 'etTg_' + id; d.className = 'et-print-toggle';
+    d.innerHTML = `<label><input type="checkbox" class="et-autoprint" ${etAutoPrintOn() ? 'checked' : ''} onchange="etSetAutoPrint(this.checked)"> 🖨 Imprimir etiqueta Zebra (SKU grande) al registrar cada SKU</label>
+      <button type="button" class="mini-btn" onclick="etTestPrint()">Probar impresora</button>`;
+    host.insertBefore(d, box.nextSibling);
+  });
+}
+async function etTestPrint(){
+  const sv = srvSettings(); if(!sv.url || !sv.token){ playErrorSound(); showToast('Inicia sesión para usar la impresora.'); return; }
+  try{
+    const r = await fetch(sv.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + sv.token}, body: JSON.stringify({zpl: etSkuLabelZpl('1.23456', 'Prueba de etiqueta Eurotruck')})});
+    const j = await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error || ('error ' + r.status));
+    playAddSound(); showToast('🖨 Prueba enviada a ' + (j.impresora || 'la Zebra'));
+  }catch(e){ playErrorSound(); showToast('🖨 ' + e.message); }
+}
+setTimeout(etMountToggles, 1500); document.addEventListener('click', ()=>setTimeout(etMountToggles, 50), true);
 function buildZpl(ref){
   const p = PRODUCTS_BY_REF[ref];
   const inv = getInv(ref);
