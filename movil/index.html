@@ -355,7 +355,7 @@ const OPS = {
       if(o.qty > 0){ m.scanHistory = [{time:o.time, ref:o.ref, title:o.title, stock:o.stock, qty:o.qty}].concat(m.scanHistory||[]).slice(0,50); }
       return m; },
     inv(r, o){ if(o.qty <= 0) return null; r = r || defaultRow(o.ref); const here = o.tramo + '/' + o.estante;
-      if(o.locMode === 'both'){ if(r.location && r.location !== here){ r.extraLocations = [...new Set((r.extraLocations||[]).concat([here]))]; } else r.location = here; }
+      if(o.locMode === 'both'){ if(!r.location && o.primera && o.primera !== here) r.location = o.primera; if(r.location && r.location !== here){ r.extraLocations = [...new Set((r.extraLocations||[]).concat([here]))]; } else r.location = here; }
       else if(o.locMode === 'move'){ r.location = here; r.extraLocations = (r.extraLocations||[]).filter(l=>l !== here); }
       else if(!r.location) r.location = here;
       return r; }
@@ -479,7 +479,9 @@ function handleCode(code, source){
     const yaAqui = ar && ar.counts && Number(ar.counts[p.ref]) > 0;
     const op = {t:'count', ref:p.ref, qty, tramo:a.tramo, estante:a.estante, title:p.title, stock:row ? row.stock : 0, time: now.toLocaleTimeString('es-DO',{hour:'2-digit',minute:'2-digit',second:'2-digit'})};
     if(locAlertOp){ beep(false); toast('Primero elige qué hacer con la alerta de ubicación.', 'bad'); return; }
-    if(row && row.location && !locsOf(row).includes(here) && !yaAqui){ showLocAlert(p, row, here, op); return; }
+    // lugares donde ya está: ubicaciones guardadas + áreas donde está contado sin cerrar
+    const lugares = locsOf(row); ((v.meta && v.meta.countAreas) || []).forEach(x=>{ const k = x.tramo + '/' + x.estante; if(x.counts && Number(x.counts[p.ref]) > 0 && !lugares.includes(k)) lugares.push(k); });
+    if(lugares.length && !lugares.includes(here) && !yaAqui){ op.primera = lugares[0]; showLocAlert(p, {location:lugares[0], extraLocations:lugares.slice(1)}, here, op); return; }
     queue(op); beep(true); showLast('inv', p);
   } else if(currentTab === 'rec'){
     const qty = Math.max(1, Number($('qtyRec').value)||1);

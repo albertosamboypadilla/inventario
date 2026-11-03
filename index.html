@@ -4387,13 +4387,19 @@ function playLocationAlertSound(){
 function extraLocs(inv){ return Array.isArray(inv && inv.extraLocations) ? inv.extraLocations.filter(l=>l && l !== inv.location) : []; }
 function allLocations(inv){ const out = []; if(inv && inv.location) out.push(inv.location); extraLocs(inv).forEach(l=>{ if(!out.includes(l)) out.push(l); }); return out; }
 function allLocationsLabel(inv){ const l = allLocations(inv); return l.length ? l.map(formatLocationLabel).join('  ＋  ') : formatLocationLabel(''); }
+// lugares donde ya está el artículo: sus ubicaciones + áreas donde está contado sin cerrar
+function otherPlaces(ref, inv, here){
+  const out = allLocations(inv).slice();
+  countAreas.forEach(a=>{ const k = a.tramo + '/' + a.estante; if(a.tramo && a.estante && a.counts && Number(a.counts[ref]) > 0 && !out.includes(k)) out.push(k); });
+  return out.includes(here) ? [] : out;
+}
 let pendingLocAlert = null;
 function showLocationAlert(p, qty, area){
   const inv = getInv(p.ref); const here = area.tramo + '/' + area.estante;
   pendingLocAlert = {ref:p.ref, qty, here, code:p.ref};
   let ov = document.getElementById('locAlertOverlay');
   if(!ov){ ov = document.createElement('div'); ov.id = 'locAlertOverlay'; document.body.appendChild(ov); }
-  const locs = allLocations(inv);
+  const locs = otherPlaces(p.ref, inv, here);
   ov.innerHTML = `<div class="loc-alert-box">
       <div class="loc-alert-kick">⚠ ESTE ARTÍCULO VA EN OTRA UBICACIÓN</div>
       <div class="loc-alert-prod"><img src="${p.img||''}" alt="" onerror="this.style.opacity=.2"><div><b>${p.title}</b><small>SKU ${p.ref}</small></div></div>
@@ -4414,7 +4420,7 @@ function resolveLocationAlert(mode){
   if(!pa) return;
   const inv = getInv(pa.ref); const p = PRODUCTS_BY_REF[pa.ref];
   if(mode === 'take'){ showToast(`Llévalo a ${allLocationsLabel(inv)} — ${p ? p.title : pa.ref}`); refocusScanInput(); return; }
-  if(mode === 'both'){ inv.extraLocations = Array.from(new Set(extraLocs(inv).concat([pa.here]))); }
+  if(mode === 'both'){ if(!inv.location){ const prim = otherPlaces(pa.ref, inv, pa.here)[0]; if(prim) inv.location = prim; } inv.extraLocations = Array.from(new Set(extraLocs(inv).concat([pa.here]))); }
   if(mode === 'move'){ inv.location = pa.here; inv.extraLocations = extraLocs(inv).filter(l=>l !== pa.here); }
   registerScan(pa.code, pa.qty, true);
   refocusScanInput();
@@ -4452,9 +4458,10 @@ function registerScan(code, qty, decided){
   const inv = getInv(p.ref);
   const area = activeArea();
   const here = area.tramo + '/' + area.estante;
-  // ¿ya tiene otra ubicación? → alerta (si no se contó ya aquí y esta área no es una de sus ubicaciones)
-  if(!decided && area.tramo && area.estante && inv.location && !allLocations(inv).includes(here) && !(Number(area.counts[p.ref]) > 0)){
-    showLocationAlert(p, qty, area); return;
+  // ¿ya está en otro lugar? (ubicación guardada o contado pendiente en otra área) → alerta
+  if(!decided && area.tramo && area.estante && !(Number(area.counts[p.ref]) > 0)){
+    const otras = otherPlaces(p.ref, inv, here);
+    if(otras.length){ showLocationAlert(p, qty, area); return; }
   }
   if(!inv.location && area.tramo && area.estante) inv.location = here;
   area.counts[p.ref] = (Number(area.counts[p.ref])||0) + qty;
