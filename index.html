@@ -2005,8 +2005,33 @@ function peekInv(ref){
   }
   return defaultInvRow(ref);
 }
+/* Código interno (Zebra): lo da SOLO el servidor (nunca se repite ni cambia).
+   Mientras llega, se muestra vacío y se pide en grupo. Sin servidor (modo local) se asigna aquí como antes. */
+let _codeReq = new Set(), _codeTimer = null, _codeWaiters = [], _codeBusy = false;
+function codeServerOn(){ try{ const sv = srvSettings(); return !!(sv.url && sv.token); }catch(e){ return false; } }
+function requestInternalCodes(refs){
+  (refs||[]).forEach(r=>{ if(r && !internalCodes[r]) _codeReq.add(r); });
+  if(!_codeReq.size) return Promise.resolve();
+  return new Promise(res=>{ _codeWaiters.push(res); clearTimeout(_codeTimer); _codeTimer = setTimeout(flushCodeReq, 200); });
+}
+async function flushCodeReq(){
+  if(_codeBusy){ _codeTimer = setTimeout(flushCodeReq, 300); return; }
+  const refs = [..._codeReq]; _codeReq.clear(); const waiters = _codeWaiters.splice(0);
+  if(!refs.length){ waiters.forEach(w=>w()); return; }
+  _codeBusy = true;
+  try{
+    const sv = srvSettings();
+    const r = await fetch(sv.url + '/api/eurotruck/codigos', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + sv.token}, body: JSON.stringify({refs})});
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok || !j.codes) throw new Error(j.error || ('error ' + r.status));
+    Object.assign(internalCodes, j.codes); if(j.next) nextInternalCode = j.next; _codeIndex = null;
+    clearTimeout(window._codeRender); window._codeRender = setTimeout(()=>{ try{ renderProducts(); }catch(e){} try{ if(articleDetailRef) renderArticleDetail(); }catch(e){} try{ renderCatalogCards(); }catch(e){} }, 150);
+  }catch(e){ setTimeout(()=>requestInternalCodes(refs), 15000); }
+  finally{ _codeBusy = false; waiters.forEach(w=>w()); }
+}
 function getInternalCode(ref){
   if(internalCodes[ref]) return internalCodes[ref];
+  if(codeServerOn()){ requestInternalCodes([ref]); return ''; }
   const code = String(nextInternalCode).padStart(5,'0');
   internalCodes[ref] = code;
   nextInternalCode++;
@@ -2016,6 +2041,7 @@ function getInternalCode(ref){
 // Asigna códigos internos a muchas referencias de una sola vez, guardando una sola vez al final
 // (evita guardar el estado completo miles de veces seguidas al exportar el catálogo completo).
 function ensureInternalCodes(refs){
+  if(codeServerOn()) return requestInternalCodes(refs);
   let assignedAny = false;
   refs.forEach(ref=>{
     if(!internalCodes[ref]){
@@ -2025,6 +2051,7 @@ function ensureInternalCodes(refs){
     }
   });
   if(assignedAny) saveMeta();
+  return Promise.resolve();
 }
 function isDeleted(ref){ return deletedRefs.includes(ref); }
 function visibleProducts(){ return products.filter(p=>!isDeleted(p.ref)); }
@@ -5770,6 +5797,7 @@ function etSample(){ const r = (typeof lastAddedRef !== 'undefined' && lastAdded
 function etRefreshPreviews(){ const d = etSample(); document.querySelectorAll('.et-prev-wrap').forEach(w=>w.innerHTML = '<small>Vista previa (2" x 1"):</small>' + etPreviewHtml(d)); }
 async function etPrintSku(ref, auto){
   const p = PRODUCTS_BY_REF[ref]; if(!p) return;
+  if(etFields().barcode && !internalCodes[ref]) await ensureInternalCodes([ref]);
   const sv = srvSettings();
   if(!sv.url || !sv.token){ if(!auto){ playErrorSound(); showToast('Para imprimir hay que iniciar sesión (conectado al servidor).'); } return; }
   try{
@@ -6533,9 +6561,9 @@ async function handleInventoryUpload(event){
 
 /* ---------- Exportar "Reporte de artículos contados" con el formato EUROTRUCK ---------- */
 function downloadCountedCsv(){ downloadCountedXlsx(); }
-function downloadCountedXlsx(){
+async function downloadCountedXlsx(){
   const area = activeArea();
-  ensureInternalCodes(Object.keys(area.counts));
+  await ensureInternalCodes(Object.keys(area.counts));
   const S = XLSX_STYLES;
   const fecha = new Date().toLocaleString('es-DO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'});
   const rows = [];
@@ -6579,9 +6607,9 @@ function downloadCountedXlsx(){
   downloadBlob(`EUROTRUCK_INVENTARIO_area_${area.tramo}-${area.estante}.xlsx`, blob);
 }
 function downloadLowStockCsv(){ downloadLowStockXlsx(); }
-function downloadLowStockXlsx(){
+async function downloadLowStockXlsx(){
   const list = computeLowStockList();
-  ensureInternalCodes(list.map(p=>p.ref));
+  await ensureInternalCodes(list.map(p=>p.ref));
   const S = XLSX_STYLES;
   const fecha = new Date().toLocaleString('es-DO', {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit', second:'2-digit'});
   const rows = [];
@@ -6621,9 +6649,9 @@ function downloadLowStockXlsx(){
   const blob = buildXlsxBlob('Pedido bajo stock', rows, colWidths);
   downloadBlob(`EUROTRUCK_PEDIDO_BAJO_STOCK_${new Date().toISOString().slice(0,10)}.xlsx`, blob);
 }
-function downloadCatalogCsv(){
+async function downloadCatalogCsv(){
   const list = visibleProducts();
-  ensureInternalCodes(list.map(p=>p.ref));
+  await ensureInternalCodes(list.map(p=>p.ref));
   const rows = [['SKU','Código interno Zebra','Producto','Marca','Categoría','Stock','Ubicación','GTIN principal','Códigos alternativos','Costo','Precio final']];
   list.forEach(p=>{
     const inv = getInv(p.ref);

@@ -581,9 +581,11 @@ function etRefreshPreviews(){ const d = {sku:'1.24265', title:'Torica, bomba de 
   document.querySelectorAll('.et-prev-wrap').forEach(w=>w.innerHTML = '<small>Vista previa (2" x 1"):</small>' + etPreviewHtml(d)); }
 async function etPrintSku(ref, auto){
   const p = BY_REF[ref]; if(!p) return;
+  let data = etDataFor(ref);
+  if(etFields().barcode && !data.barcode && cfg.token){ try{ const r = await fetch(cfg.url + '/api/' + APP + '/codigos', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({refs:[ref]})}); const j = await r.json(); if(j.codes && j.codes[ref]) data.barcode = j.codes[ref]; }catch(e){} }
   if(!cfg.token || !navigator.onLine){ if(!auto) toast('Para imprimir necesitas internet y sesión iniciada.', 'bad'); return; }
   try{
-    const r = await fetch(cfg.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({zpl: etLabelZpl(etDataFor(ref), auto ? etCopies() : 1)})});
+    const r = await fetch(cfg.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({zpl: etLabelZpl(data, auto ? etCopies() : 1)})});
     const j = await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error || ('error ' + r.status));
     if(!auto) toast('🖨 Etiqueta impresa: ' + p.ref, 'ok');
   }catch(e){ beep(false); toast('🖨 No se pudo imprimir: ' + e.message, 'bad'); }
