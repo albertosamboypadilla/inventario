@@ -969,6 +969,7 @@ button{font-family:inherit;}
 
 /* ===== FICHA DE ARTÍCULO (detalle al tocar un artículo del catálogo) ===== */
 #articleDetailOverlay,#addArticleOverlay{z-index:95;}
+.multi-code-list{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}.multi-code-row{display:flex;gap:6px;align-items:center}.multi-code-row input{flex:1;padding:9px 10px;background:#0d1a30;border:1px solid rgba(255,255,255,.12);border-radius:6px;color:#e6eefc;font-size:.9rem}
 .open-art{cursor:pointer}.inv-counted-info.open-art:hover b{text-decoration:underline}.open-art-hint{color:#60a5fa}
 .art-panel{width:min(880px,96vw);max-height:94vh;overflow:auto;}
 .art-sku-chip{display:inline-block;padding:4px 12px;background:rgba(45,118,255,.16);border:1px solid rgba(45,118,255,.4);border-radius:999px;color:#c1d8ff;font:700 .74rem var(--technical);margin-bottom:8px;}
@@ -2961,11 +2962,12 @@ async function makeServerDbApi(cfg){
 function restoreCustomProducts(){
   for(const ref of Object.keys(inventoryState)){
     const row = inventoryState[ref];
+    if(row && Array.isArray(row.oeRefs) && PRODUCTS_BY_REF[ref]){ const pp = PRODUCTS_BY_REF[ref]; if(!pp._baseRefs) pp._baseRefs = (pp.refsList||[]).filter(r=>!row.oeRefs.includes(r)); pp.refsList = Array.from(new Set(pp._baseRefs.concat(row.oeRefs))); }
     if(!row || !row.product) continue;
     const pr = row.product;
     let p = PRODUCTS_BY_REF[ref];
     if(!p){
-      p = {ref, sku:ref, title:pr.title||ref, brand:pr.brand||'DT Spare Parts', cat:pr.cat||'Repuesto', pack:'1 PCS', gtin:pr.gtin||'', url:'', refsList:[], marca:MARCA_FIJA, img:pr.img||'', applications:pr.applications||'', sourceUrl:PORTAL_URL, _custom:true};
+      p = {ref, sku:ref, title:pr.title||ref, brand:pr.brand||'DT Spare Parts', cat:pr.cat||'Repuesto', pack:'1 PCS', gtin:pr.gtin||'', url:'', refsList:Array.from(new Set((pr.refs||[]).concat(row.oeRefs||[]))), _baseRefs:[], marca:MARCA_FIJA, img:pr.img||'', applications:pr.applications||'', sourceUrl:PORTAL_URL, _custom:true};
       products.push(p); PRODUCTS_BY_REF[ref] = p;
     } else if(p._custom){
       Object.assign(p, {title:pr.title||ref, brand:pr.brand||p.brand, cat:pr.cat||p.cat, gtin:pr.gtin||'', img:pr.img||'', applications:pr.applications||''});
@@ -3253,7 +3255,8 @@ function getFilteredProducts(){
     if(p.title.toLowerCase().includes(q) || p.ref.toLowerCase().includes(q) || p.cat.toLowerCase().includes(q) || (p.gtin||'').toLowerCase().includes(q) || (inv.gtin||'').toLowerCase().includes(q)) return true;
     if(inv.altCodes && inv.altCodes.some(c=>String(c).toLowerCase().includes(q))) return true;
     if(internalCodes[p.ref] && internalCodes[p.ref].toLowerCase().includes(q)) return true;
-    if(p.refsList && p.refsList.some(r=>String(r).toLowerCase().includes(q))) return true;
+    if(codeListHit(p.refsList, q, false)) return true;
+    if(inv.altCodes && normCode(q).length >= 3 && inv.altCodes.some(c=>normCode(c).includes(normCode(q)))) return true;
     return false;
   });
 }
@@ -4092,7 +4095,7 @@ function allCodesIndex(){
   const add = c=>{ c = String(c||'').trim().toLowerCase(); if(c) set.add(c); };
   visibleProducts().forEach(p=>{
     add(p.ref); add(p.gtin); add(internalCodes[p.ref]);
-    (p.refsList||[]).forEach(add);
+    (p.refsList||[]).forEach(r=>{ add(r); const sb = stripBrand(r); if(sb !== String(r).toLowerCase().trim()){ add(sb); add(normCode(sb)); } });
     const inv = (typeof peekInv === 'function') ? peekInv(p.ref) : inventoryState[p.ref];
     if(inv){ add(inv.gtin); (inv.altCodes||[]).forEach(add); }
   });
@@ -4371,7 +4374,7 @@ function findProductByCode(code){
     if((p.gtin||'').toLowerCase()===lc) return true;
     if(internalCodes[p.ref] && internalCodes[p.ref].toLowerCase()===lc) return true;
     if(inv.altCodes && inv.altCodes.some(c=>String(c).toLowerCase()===lc)) return true;
-    if(Array.isArray(p.refsList) && p.refsList.some(r=>String(r).toLowerCase()===lc)) return true;
+    if(codeListHit(p.refsList, lc, true)) return true;
     return false;
   });
 }
@@ -4918,7 +4921,7 @@ function renderCatalogCards(){
       (p.brand||'').toLowerCase().includes(q) || (p.applications||'').toLowerCase().includes(q)) return true;
     if(Array.isArray(inv.altCodes) && inv.altCodes.some(c=>String(c).toLowerCase().includes(q))) return true;
     if(internalCodes[p.ref] && internalCodes[p.ref].toLowerCase().includes(q)) return true;
-    if(Array.isArray(p.refsList) && p.refsList.some(r=>String(r).toLowerCase().includes(q))) return true;
+    if(codeListHit(p.refsList, q, false)) return true;
     return false;
   });
 
@@ -5005,6 +5008,7 @@ function openAddArticleForm(){
   newArticleImageData = '';
   renderAddArticleForm();
   document.getElementById('addArticleOverlay').classList.add('is-open');
+  setTimeout(()=>{ ['newArtGtinList','newArtOeList'].forEach((id,i)=>{ const l = document.getElementById(id); if(l && !l.children.length) addMultiCodeRow(id, i ? 'oe' : 'gtin'); }); }, 0);
   setTimeout(()=>{ const el = document.getElementById('newArtRef'); if(el) el.focus(); }, 50);
 }
 function closeAddArticleForm(){
@@ -5035,8 +5039,14 @@ function renderAddArticleForm(){
       <div class="art-section-kicker">Datos del artículo</div>
       <div class="art-price-row" style="margin-bottom:12px;">
         <label>Referencia / SKU *<input type="text" id="newArtRef" placeholder="Ej. 1.00999"></label>
-        <label>GTIN / código de barras<span style="display:flex;gap:6px;"><input type="text" id="newArtGtin" placeholder="Opcional" style="flex:1;"><button type="button" class="scan-camera-btn" title="Escanear con la cámara" onclick="openBarcodeScanner(code=>{ document.getElementById('newArtGtin').value = code; closeBarcodeScanner(); })">📷</button></span></label>
+
       </div>
+      <div class="art-section-kicker" style="margin-top:4px">GTIN / códigos de barras <small style="text-transform:none;letter-spacing:0;color:#8b96ab">— uno por casilla; al escanear cualquiera aparece este artículo</small></div>
+      <div id="newArtGtinList" class="multi-code-list"></div>
+      <button type="button" class="mini-btn" style="margin:2px 0 12px" onclick="addMultiCodeRow('newArtGtinList','gtin')">＋ Otro GTIN</button>
+      <div class="art-section-kicker">Referencia o artículo original <small style="text-transform:none;letter-spacing:0;color:#8b96ab">— número OE / del fabricante; uno por casilla (ej. Volvo 20514235)</small></div>
+      <div id="newArtOeList" class="multi-code-list"></div>
+      <button type="button" class="mini-btn" style="margin:2px 0 12px" onclick="addMultiCodeRow('newArtOeList','oe')">＋ Otra referencia original</button>
       <div class="art-price-row" style="margin-bottom:12px;">
         <label style="flex:2;min-width:220px;">Nombre del artículo *<input type="text" id="newArtTitle" placeholder="Ej. Filtro de aceite"></label>
         <label>Marca<input type="text" id="newArtBrand" placeholder="Ej. Scania" value="DT Spare Parts"></label>
@@ -5109,6 +5119,47 @@ async function handleNewArticleImageUrl(url){
     if(wrap) wrap.innerHTML += '<small style="display:block;color:#ff9aa6;font-size:.65rem;margin-top:4px;">No se pudo copiar la foto automáticamente — se usará el enlace directo.</small>';
   }
 }
+/* ---- casillas individuales de GTIN y referencias originales ---- */
+function addMultiCodeRow(listId, kind, value){
+  const list = document.getElementById(listId); if(!list) return null;
+  const row = document.createElement('div'); row.className = 'multi-code-row';
+  const ph = kind === 'gtin' ? 'GTIN (8 a 14 dígitos)' : 'Ej. Volvo 20514235  ó  20514235';
+  row.innerHTML = `<input type="text" class="multi-code-input" data-kind="${kind}" placeholder="${ph}" ${kind==='gtin'?'inputmode="numeric"':''}>`
+    + (kind === 'gtin' ? `<button type="button" class="scan-camera-btn" title="Escanear con la cámara">📷</button>` : '')
+    + `<button type="button" class="mini-btn mini-btn--del" title="Quitar">✕</button>`;
+  const inp = row.querySelector('input'); inp.value = value || '';
+  const cam = row.querySelector('.scan-camera-btn'); if(cam) cam.onclick = ()=> openBarcodeScanner(code=>{ inp.value = code; closeBarcodeScanner(); });
+  row.querySelector('.mini-btn--del').onclick = ()=>{ if(list.children.length > 1) row.remove(); else inp.value = ''; };
+  // pegar varios códigos juntos: cada uno va a su propia casilla
+  inp.addEventListener('paste', e=>{ const t = (e.clipboardData||window.clipboardData).getData('text'); const parts = splitCodes(t, kind); if(parts.length > 1){ e.preventDefault(); inp.value = parts[0]; parts.slice(1).forEach(v=>addMultiCodeRow(listId, kind, v)); } });
+  inp.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); const r = addMultiCodeRow(listId, kind); if(r) r.querySelector('input').focus(); } });
+  list.appendChild(row); return row;
+}
+function splitCodes(text, kind){
+  text = String(text||'').trim(); if(!text) return [];
+  const parts = kind === 'gtin' ? text.split(/[|,;\s]+/) : text.split(/[|,;\n]+/);
+  return Array.from(new Set(parts.map(x=>x.trim()).filter(Boolean)));
+}
+function readMultiCodes(listId){
+  const list = document.getElementById(listId); if(!list) return [];
+  const out = []; list.querySelectorAll('input').forEach(i=>{ const v = i.value.trim().replace(/\s{2,}/g,' '); if(v && !out.some(x=>x.toLowerCase()===v.toLowerCase())) out.push(v); });
+  return out;
+}
+function setMultiCodes(listId, kind, values){
+  const list = document.getElementById(listId); if(!list) return;
+  const cur = readMultiCodes(listId); const all = cur.concat((values||[]).filter(v=>!cur.some(c=>c.toLowerCase()===String(v).toLowerCase())));
+  list.innerHTML = ''; (all.length ? all : ['']).forEach(v=>addMultiCodeRow(listId, kind, v));
+}
+// compara códigos sin importar espacios, puntos ni guiones ("205 142 35" = "20514235")
+const normCode = c => String(c||'').toLowerCase().replace(/[\s.\-\/]/g,'');
+// "Volvo 205 142 35" -> "20514235" (quita la marca de adelante)
+const stripBrand = c => String(c||'').toLowerCase().trim().replace(/^[a-zà-ÿ&'.\s-]+?\s+(?=[0-9a-z]*\d)/,'');
+function codeListHit(list, q, exact){
+  if(!Array.isArray(list) || !list.length) return false;
+  const nq = normCode(q);
+  return list.some(r=>{ const s = String(r).toLowerCase(); if(exact){ if(s === q) return true; const parts = s.split(/\s+/); return normCode(s) === nq || (nq.length >= 5 && (normCode(parts[parts.length-1]) === nq || normCode(stripBrand(s)) === nq)); }
+    return s.includes(q) || (nq.length >= 3 && normCode(s).includes(nq)); });
+}
 function parsePastedArticleText(fullText){
   const result = {ref:'', title:'', brand:'', gtins:[], crossRefs:[]};
   const refMatch = fullText.match(/\b(\d{1,3}\.\d{4,6})\b\s*([^\n]*)/);
@@ -5119,8 +5170,10 @@ function parsePastedArticleText(fullText){
   const brandMatch = fullText.match(/^[ \t]*([A-Za-zÀ-ÿ ]{2,30}?)[ \t]*\d{1,3}\.\d{4,6}/m);
   if(brandMatch) result.brand = brandMatch[1].trim();
   const refDigits = result.ref.replace('.', '');
-  result.gtins = Array.from(new Set((fullText.match(/\b\d{8,14}\b/g)||[]))).filter(n => n !== refDigits);
   const crossIdx = fullText.search(/Reemplaza a/i);
+  // los GTIN se toman solo de la parte de arriba (antes de "Reemplaza a"), para no mezclar números de otras marcas
+  const gtinPart = crossIdx >= 0 ? fullText.slice(0, crossIdx) : fullText;
+  result.gtins = Array.from(new Set((gtinPart.match(/\b\d{8,14}\b/g)||[]))).filter(n => n !== refDigits);
   if(crossIdx >= 0){
     const lines = fullText.slice(crossIdx).split('\n').map(l=>l.trim()).filter(Boolean);
     let start = 0;
@@ -5141,18 +5194,13 @@ function fillArticleFromPastedText(){
   const refEl = document.getElementById('newArtRef');
   const titleEl = document.getElementById('newArtTitle');
   const brandEl = document.getElementById('newArtBrand');
-  const gtinEl = document.getElementById('newArtGtin');
   const appsEl = document.getElementById('newArtApps');
   const filled = [];
   if(data.ref && refEl && !refEl.value.trim()){ refEl.value = data.ref; filled.push('referencia'); }
   if(data.title && titleEl && !titleEl.value.trim()){ titleEl.value = data.title; filled.push('nombre'); }
   if(data.brand && brandEl){ brandEl.value = data.brand; filled.push('marca'); }
-  if(data.gtins.length && gtinEl && !gtinEl.value.trim()){ gtinEl.value = data.gtins.join(', '); filled.push('GTIN'); }
-  if(data.crossRefs.length && appsEl){
-    const note = 'Reemplaza a: ' + data.crossRefs.join(', ');
-    appsEl.value = appsEl.value.trim() ? (appsEl.value.trim() + ' · ' + note) : note;
-    filled.push('reemplaza a');
-  }
+  if(data.gtins.length){ setMultiCodes('newArtGtinList', 'gtin', data.gtins); filled.push(data.gtins.length + ' GTIN (cada uno en su casilla)'); }
+  if(data.crossRefs.length){ setMultiCodes('newArtOeList', 'oe', data.crossRefs); filled.push(data.crossRefs.length + ' referencia(s) original(es)'); }
   if(filled.length) showToast(`Se completó desde el texto pegado: ${filled.join(', ')}. Revisá antes de guardar.`);
   else showToast('No se reconocieron datos en el texto pegado — revisá el formato o completá manualmente.');
 }
@@ -5166,7 +5214,13 @@ function submitNewArticle(){
   const brand = (document.getElementById('newArtBrand').value||'').trim() || 'DT Spare Parts';
   const cat = (document.getElementById('newArtCat').value||'').trim() || 'Repuesto';
   const applications = (document.getElementById('newArtApps').value||'').trim();
-  const gtin = (document.getElementById('newArtGtin').value||'').trim();
+  const gtinList = readMultiCodes('newArtGtinList');
+  const badG = gtinList.filter(c=>!/^[0-9]{8,14}$/.test(c));
+  if(badG.length){ playErrorSound(); showToast('GTIN no válido (debe tener 8 a 14 dígitos): ' + badG.join(', ')); return; }
+  for(const c of gtinList){ const owner = findProductByCode(c); if(owner){ playErrorSound(); showToast(`El GTIN ${c} ya pertenece al SKU ${owner.ref}.`); return; } }
+  const gtin = gtinList[0] || '';
+  const altCodes = gtinList.slice(1);
+  const oeRefs = readMultiCodes('newArtOeList');
   const stock = Math.max(0, Number(document.getElementById('newArtStock').value)||0);
   const tramo = (document.getElementById('newArtTramo').value||'').trim();
   const estante = (document.getElementById('newArtEstante').value||'').trim();
@@ -5174,16 +5228,19 @@ function submitNewArticle(){
   const costVal = costEl ? costEl.value : '';
   const priceVal = document.getElementById('newArtPrice').value;
 
-  const newP = {ref, sku:ref, title, brand, cat, pack:'1 PCS', gtin, url:'', refsList:[], marca:MARCA_FIJA, img:newArticleImageData||'', applications, sourceUrl: PORTAL_URL, _custom:true};
+  const newP = {ref, sku:ref, title, brand, cat, pack:'1 PCS', gtin, url:'', refsList:oeRefs.slice(), _baseRefs:[], marca:MARCA_FIJA, img:newArticleImageData||'', applications, sourceUrl: PORTAL_URL, _custom:true};
   products.push(newP);
   PRODUCTS_BY_REF[ref] = newP;
   const inv = getInv(ref);
   // la ficha del artículo se guarda con su registro, para que exista en todas las PC
-  inv.product = {title, brand, cat, applications, gtin, img: newArticleImageData||'', creado: new Date().toISOString(), por: currentUser ? currentUser.username : ''};
+  inv.product = {title, brand, cat, applications, gtin, refs: oeRefs, img: newArticleImageData||'', creado: new Date().toISOString(), por: currentUser ? currentUser.username : ''};
   inv.stock = stock;
   inv.cost = costVal===''?'':Number(costVal);
   inv.price = priceVal===''?'':Number(priceVal);
   inv.gtin = gtin;
+  inv.altCodes = altCodes;
+  inv.oeRefs = oeRefs;
+  _codeIndex = null;
   if(tramo && estante){
     inv.location = `${tramo}/${estante}`;
     let area = countAreas.find(a=>a.tramo===tramo && a.estante===estante);
@@ -5272,6 +5329,19 @@ function renderArticleDetail(){
     </div>
 
     <div class="art-section">
+      <div class="art-section-kicker">Referencia o artículo original</div>
+      <h4>Números OE / del fabricante</h4>
+      <p class="art-section-sub">Al buscar o escanear cualquiera de estos números aparece este artículo.</p>
+      <div class="art-gtin-row">
+        ${(p.refsList||[]).length ? (p.refsList||[]).map(r=>{ const mine = (inv.oeRefs||[]).includes(r); return `<span class="gtin-chip${mine?' gtin-chip--removable':''}" ${mine?`title="Quitar" onclick="removeOeRef('${ref}', this.dataset.r)" data-r="${String(r).replace(/"/g,'&quot;')}"`:''}>${r}${mine?' ✕':''}</span>`; }).join('') : '<span class="gtin-chip">Sin referencia original</span>'}
+      </div>
+      <div class="art-add-gtin-row">
+        <input type="text" id="artAddOeInput" placeholder="Ej. Volvo 20514235 — varias separadas por coma">
+        <button class="mini-btn mini-btn--wa" onclick="addOeRefFromInput('${ref}')">Guardar referencia</button>
+      </div>
+    </div>
+
+    <div class="art-section">
       <div class="art-section-kicker">Solo administrador</div>
       <h4>Costo y venta final</h4>
       <p class="art-section-sub">Poné el precio en dólares en la casilla "Dólares" y se calcula solo en pesos en "Precio final" con la tasa del día (se puede ver/cambiar en la ventana de Cotizaciones).</p>
@@ -5345,6 +5415,26 @@ function saveArticlePrices(ref){
   renderProducts();
   renderCatalogCards();
   showToast('Precio actualizado.');
+}
+function addOeRefFromInput(ref){
+  const el = document.getElementById('artAddOeInput'); if(!el) return;
+  const vals = splitCodes(el.value, 'oe'); if(!vals.length){ playErrorSound(); showToast('Escribí la referencia original.'); return; }
+  const inv = getInv(ref); const p = PRODUCTS_BY_REF[ref];
+  inv.oeRefs = Array.isArray(inv.oeRefs) ? inv.oeRefs : [];
+  const added = vals.filter(v=>!(p.refsList||[]).some(r=>String(r).toLowerCase()===v.toLowerCase()));
+  inv.oeRefs = inv.oeRefs.concat(added);
+  if(!p._baseRefs) p._baseRefs = (p.refsList||[]).slice();
+  p.refsList = Array.from(new Set(p._baseRefs.concat(inv.oeRefs)));
+  if(inv.product){ inv.product.refs = (inv.product.refs||[]).concat(added.filter(a=>!(inv.product.refs||[]).includes(a))); }
+  _codeIndex = null; saveInventory(); renderArticleDetail(); renderProducts();
+  showToast(added.length ? `Referencia guardada: ${added.join(', ')}` : 'Esa referencia ya estaba.');
+}
+function removeOeRef(ref, r){
+  const inv = getInv(ref); const p = PRODUCTS_BY_REF[ref];
+  inv.oeRefs = (inv.oeRefs||[]).filter(x=>x !== r);
+  if(inv.product && inv.product.refs) inv.product.refs = inv.product.refs.filter(x=>x !== r);
+  p.refsList = Array.from(new Set((p._baseRefs||[]).concat(inv.oeRefs)));
+  _codeIndex = null; saveInventory(); renderArticleDetail(); renderProducts(); showToast('Referencia quitada.');
 }
 function addAltGtinFromInput(ref){
   const el = document.getElementById('artAddGtinInput');

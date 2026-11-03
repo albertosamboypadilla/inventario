@@ -267,24 +267,27 @@ async function loadCatalog(){
 }
 function deletedSet(){ if(isGuest()) return new Set(PUB.eliminados || []); const m = view().meta; return new Set((m && m.deletedRefs) || []); }
 function rebuildCodes(){
-  CODE_MAP = new Map();
-  const add = (c, ref)=>{ c = String(c||'').trim().toLowerCase(); if(c && !CODE_MAP.has(c)) CODE_MAP.set(c, ref); };
+  CODE_MAP = new Map(); NORM_MAP = new Map();
+  const add = (c, ref)=>{ c = String(c||'').trim().toLowerCase(); if(!c) return; if(!CODE_MAP.has(c)) CODE_MAP.set(c, ref); const n = normCode(c); if(n.length >= 5 && !NORM_MAP.has(n)) NORM_MAP.set(n, ref);
+    const sb = c.replace(/^[a-zà-ÿ&'.\s-]+?\s+(?=[0-9a-z]*\d)/,''); if(sb !== c){ if(!CODE_MAP.has(sb)) CODE_MAP.set(sb, ref); const ns = normCode(sb); if(ns.length >= 5 && !NORM_MAP.has(ns)) NORM_MAP.set(ns, ref); } };
   const v = view(); const del = deletedSet();
   // artículos creados en la PC (la ficha viaja en el registro de inventario)
   if(isGuest()) Object.entries(PUB.nuevos || {}).forEach(([ref,pr])=>{ if(!BY_REF[ref]){ BY_REF[ref] = {ref, title:pr.title||ref, brand:pr.brand||'', cat:pr.cat||'', gtin:pr.gtin||'', refs:[], oe:'', img:pr.img||'', custom:true}; PRODUCTS.push(BY_REF[ref]); } });
-  Object.entries(v.inv).forEach(([ref,row])=>{ if(row && row.product && !BY_REF[ref]){ const pr = row.product; BY_REF[ref] = {ref, title:pr.title||ref, brand:pr.brand||'', cat:pr.cat||'', gtin:pr.gtin||'', refs:[], oe:'', img:pr.img||'', custom:true}; PRODUCTS.push(BY_REF[ref]); } });
+  Object.entries(v.inv).forEach(([ref,row])=>{ if(row && row.product && !BY_REF[ref]){ const pr = row.product; BY_REF[ref] = {ref, title:pr.title||ref, brand:pr.brand||'', cat:pr.cat||'', gtin:pr.gtin||'', refs:[...new Set((pr.refs||[]).concat(row.oeRefs||[]))], oe:'', img:pr.img||'', custom:true}; PRODUCTS.push(BY_REF[ref]); } });
   for(const p of PRODUCTS){ if(del.has(p.ref)) continue; add(p.ref, p.ref); }
   const ic = (v.meta && v.meta.internalCodes) || {};
   for(const p of PRODUCTS){
     if(del.has(p.ref)) continue;
     add(ic[p.ref], p.ref); add(p.gtin, p.ref);
-    const row = v.inv[p.ref]; if(row){ add(row.gtin, p.ref); (row.altCodes||[]).forEach(c=>add(c, p.ref)); }
+    const row = v.inv[p.ref]; if(row){ add(row.gtin, p.ref); (row.altCodes||[]).forEach(c=>add(c, p.ref)); (row.oeRefs||[]).forEach(c=>add(c, p.ref)); }
     (GTIN_ALT[p.ref]||[]).forEach(c=>add(c, p.ref));
     p.refs.forEach(c=>add(c, p.ref));
   }
   CODES_SORTED = Array.from(CODE_MAP.keys()).sort();
 }
-function findByCode(code){ const ref = CODE_MAP.get(String(code||'').trim().toLowerCase()); return ref ? BY_REF[ref] : null; }
+let NORM_MAP = new Map();
+const normCode = c => String(c||'').toLowerCase().replace(/[\s.\-\/]/g,'');
+function findByCode(code){ const lc = String(code||'').trim().toLowerCase(); const ref = CODE_MAP.get(lc) || (normCode(lc).length >= 5 ? NORM_MAP.get(normCode(lc)) : null); return ref ? BY_REF[ref] : null; }
 function hasLongerCode(code){
   const lc = code.trim().toLowerCase(); let lo = 0, hi = CODES_SORTED.length;
   while(lo < hi){ const m = (lo+hi) >> 1; if(CODES_SORTED[m] < lc) lo = m + 1; else hi = m; }
@@ -767,7 +770,8 @@ function doSearch(more){
   let res = [];
   for(const p of PRODUCTS){
     if(del.has(p.ref)) continue;
-    if(words.length){ const hay = (p.title + ' ' + p.ref + ' ' + p.brand + ' ' + p.cat + ' ' + p.gtin + ' ' + p.oe + ' ' + p.refs.join(' ') + ' ' + (ic[p.ref]||'')).toLowerCase(); if(!words.every(w=>hay.includes(w))) continue; }
+    if(words.length){ const rw = v.inv[p.ref]; const hay = (p.title + ' ' + p.ref + ' ' + p.brand + ' ' + p.cat + ' ' + p.gtin + ' ' + p.oe + ' ' + p.refs.join(' ') + ' ' + (ic[p.ref]||'') + (rw ? ' ' + (rw.gtin||'') + ' ' + (rw.altCodes||[]).join(' ') + ' ' + (rw.oeRefs||[]).join(' ') : '')).toLowerCase();
+      if(!words.every(w=>hay.includes(w))){ const nq = normCode(q); if(!(nq.length >= 5 && normCode(hay).includes(nq))) continue; } }
     res.push(p);
   }
   // los que están en stock primero (de más a menos); el código exacto escaneado, arriba de todo
@@ -811,7 +815,7 @@ function openDetail(ref){
       <tr><td>Código Zebra</td><td>${esc(ic[ref] || '—')}</td></tr>
       <tr><td>Códigos de barras</td><td>${codes.map(esc).join('<br>') || '—'}</td></tr>
       ${p.oe ? `<tr><td>OE</td><td>${esc(p.oe)}</td></tr>` : ''}
-      ${p.refs.length ? `<tr><td>Refs. cruzadas</td><td>${p.refs.map(esc).join('<br>')}</td></tr>` : ''}
+      ${(()=>{ const all = [...new Set(p.refs.concat(row.oeRefs||[]))]; return all.length ? `<tr><td>Ref. / artículo original</td><td>${all.map(esc).join('<br>')}</td></tr>` : ''; })()}
     </table>
     ${isAdmin() ? `<div class="pricebox"><div class="pbt">📍 Dónde va ubicado</div>
       <div class="locin"><label>Tramo<input id="lfTramo" type="text" autocomplete="off" autocapitalize="characters" value="${esc((row.location||'').split('/')[0] || '')}" placeholder="Ej. 3"></label>
