@@ -1029,6 +1029,26 @@ if('serviceWorker' in navigator && (location.protocol === 'https:' || location.h
   else if(cfg.guest){ startGuest(); }
   else { $('login').style.display = 'flex'; }
 })();
+
+/* ---------- vigilante de versión: si se publica una versión nueva, esta ventana se actualiza sola ---------- */
+(function(){
+  const url = location.pathname.endsWith('/') ? location.pathname + 'index.html' : location.pathname;
+  let tag = null;
+  const getTag = async ()=>{ try{ const r = await fetch(url + '?v=' + Date.now(), {method:'HEAD', cache:'no-store'}); return r.ok ? (r.headers.get('etag') || r.headers.get('last-modified')) : null; }catch(e){ return null; } };
+  const busy = ()=>{ const a = document.activeElement; const typing = a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.value && a.type !== 'number' && !/scan|inInv|inRec|inBus/i.test(a.id||'');
+    return typing || !!document.querySelector('#locAlertOverlay.is-open, #locAlert.on, #addArticleOverlay.is-open'); };
+  function banner(){
+    let b = document.getElementById('newVersionBar');
+    if(!b){ b = document.createElement('div'); b.id = 'newVersionBar'; b.style.cssText = 'position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:100001;background:#16a34a;color:#fff;font:700 14px system-ui,sans-serif;padding:10px 16px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.4);cursor:pointer';
+      b.textContent = '🔄 Hay una versión nueva — actualizando…'; b.onclick = ()=>location.reload(); document.body.appendChild(b); }
+    const tryReload = ()=>{ if(busy()){ b.textContent = '🔄 Versión nueva lista — toca aquí para actualizar'; setTimeout(tryReload, 5000); } else location.reload(); };
+    setTimeout(tryReload, 4000);
+  }
+  getTag().then(t=>{ tag = t; });
+  let shown = false;
+  setInterval(async()=>{ if(shown || document.hidden) return; const t = await getTag(); if(tag && t && t !== tag){ shown = true; banner(); } }, 60000);
+  document.addEventListener('visibilitychange', async()=>{ if(shown || document.hidden) return; const t = await getTag(); if(tag && t && t !== tag){ shown = true; banner(); } });
+})();
 </script>
 </body>
 </html>
