@@ -706,7 +706,7 @@ button{font-family:inherit;}
 .footer-bottom .ops{display:flex;flex-direction:column;gap:3px;}
 
 /* Toast */
-.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--panel);border:1px solid rgba(45,118,255,.5);color:#eef4ff;padding:12px 18px;border-radius:8px;font-size:.8rem;opacity:0;pointer-events:none;transition:all .25s var(--ease-out);z-index:50;box-shadow:0 10px 30px rgba(0,0,0,.4);}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:var(--panel);border:1px solid rgba(45,118,255,.5);color:#eef4ff;padding:12px 18px;border-radius:8px;font-size:.8rem;opacity:0;pointer-events:none;transition:all .25s var(--ease-out);z-index:100000;box-shadow:0 10px 30px rgba(0,0,0,.4);}
 .toast.is-visible{opacity:1;transform:translate(-50%,0);}
 
 /* ===== PRODUCT CARD — extended fields ===== */
@@ -969,6 +969,22 @@ button{font-family:inherit;}
 
 /* ===== FICHA DE ARTÍCULO (detalle al tocar un artículo del catálogo) ===== */
 #articleDetailOverlay,#addArticleOverlay{z-index:95;}
+#locAlertOverlay{position:fixed;inset:0;z-index:99990;background:rgba(40,10,0,.78);display:none;align-items:center;justify-content:center;padding:20px}
+#locAlertOverlay.is-open{display:flex;animation:laFlash .5s ease-in-out 3}
+@keyframes laFlash{50%{background:rgba(120,50,0,.85)}}
+.loc-alert-box{background:#111827;border:3px solid #f59e0b;border-radius:16px;max-width:760px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.6);color:#fff}
+.loc-alert-kick{color:#fbbf24;font-weight:900;font-size:1.25rem;letter-spacing:.04em;margin-bottom:14px}
+.loc-alert-prod{display:flex;gap:12px;align-items:center;margin-bottom:14px}.loc-alert-prod img{width:64px;height:64px;object-fit:contain;background:#0b1120;border-radius:8px}
+.loc-alert-prod b{display:block;font-size:1.1rem}.loc-alert-prod small{color:#9ca3af}
+.loc-alert-big{font-size:2.6rem;font-weight:900;color:#fde68a;background:#1f1300;border:2px dashed #f59e0b;border-radius:12px;padding:14px 18px;margin:8px 0;line-height:1.1}
+.loc-alert-here{color:#cbd5e1;margin:10px 0 16px;font-size:1rem}
+.loc-alert-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.loc-alert-btns button{border:0;border-radius:10px;padding:14px 10px;font-weight:800;font-size:.95rem;cursor:pointer;color:#fff}
+.loc-alert-btns button small{display:block;font-weight:500;font-size:.72rem;opacity:.85;margin-top:4px}
+.la-take{background:#d97706}.la-both{background:#2563eb}.la-move{background:#374151}
+.extra-loc{color:#93c5fd;cursor:pointer;font-size:.8rem}
+@media(max-width:640px){.loc-alert-btns{grid-template-columns:1fr}.loc-alert-big{font-size:1.9rem}}
+.field-error{border:2px solid #ef4444 !important;box-shadow:0 0 0 3px rgba(239,68,68,.25) !important}
 .multi-code-list{display:flex;flex-direction:column;gap:6px;margin-bottom:6px}.multi-code-row{display:flex;gap:6px;align-items:center}.multi-code-row input{flex:1;padding:9px 10px;background:#0d1a30;border:1px solid rgba(255,255,255,.12);border-radius:6px;color:#e6eefc;font-size:.9rem}
 .open-art{cursor:pointer}.inv-counted-info.open-art:hover b{text-decoration:underline}.open-art-hint{color:#60a5fa}
 .art-panel{width:min(880px,96vw);max-height:94vh;overflow:auto;}
@@ -3271,7 +3287,7 @@ function productCardHtml(p){
   const zebraCode = internalCodes[p.ref] || getInternalCode(p.ref);
   const zebraBarcodeSvg = code39SvgHtml(zebraCode);
   const gtinLine = `<div><b>${tr('Código de barras','Barcode')}</b><span>${zebraBarcodeSvg ? `<div class="product-barcode-wrap">${zebraBarcodeSvg}<small>Zebra ${zebraCode}</small></div>` : ''}${gtinAll.map(g=>`<div>${g}</div>`).join('')}</span></div>`;
-  const locLine = inv.location ? formatLocationLabel(inv.location) : tr('Sin asignar','Unassigned');
+  const locLine = inv.location ? allLocationsLabel(inv) : tr('Sin asignar','Unassigned');
   return `
   <article class="product-card" data-ref="${p.ref}">
     <div class="product-visual" onclick="event.stopPropagation();openZoom('${p.ref}')"><img src="${p.img}" alt="${p.title} — ${p.ref}" loading="lazy" onerror="this.style.opacity=.25"></div>
@@ -3380,7 +3396,7 @@ function openProductModal(ref){
       <div><small>Marca del vehículo</small><span>${p.brand}</span></div>
       <div><small>Categoría</small><span>${p.cat}</span></div>
       <div><small>Empaque</small><span>${p.pack}</span></div>
-      <div><small>Ubicación en almacén</small><span>${inv.location ? formatLocationLabel(inv.location) : 'Sin asignar'}</span></div>
+      <div><small>Ubicación en almacén</small><span>${inv.location ? allLocationsLabel(inv) : 'Sin asignar'}</span></div>
       ${oeHtml}
       ${replacesHtml}
     </div>
@@ -4363,6 +4379,53 @@ function playErrorSound(){
   playTone(155, 0.3, 'sawtooth', 0.16, 0.45);
 }
 
+function playLocationAlertSound(){
+  // Alerta de "está en otra ubicación": tres campanadas sube-baja, distinta al de agregar (cuadrado) y al de error (grave)
+  [0, 0.28, 0.56].forEach((t, i)=>{ playTone(1046.5, 0.13, 'triangle', t, 0.6); playTone(784, 0.16, 'triangle', t + 0.12, 0.6); });
+}
+/* ---------- varias ubicaciones por artículo ---------- */
+function extraLocs(inv){ return Array.isArray(inv && inv.extraLocations) ? inv.extraLocations.filter(l=>l && l !== inv.location) : []; }
+function allLocations(inv){ const out = []; if(inv && inv.location) out.push(inv.location); extraLocs(inv).forEach(l=>{ if(!out.includes(l)) out.push(l); }); return out; }
+function allLocationsLabel(inv){ const l = allLocations(inv); return l.length ? l.map(formatLocationLabel).join('  ＋  ') : formatLocationLabel(''); }
+let pendingLocAlert = null;
+function showLocationAlert(p, qty, area){
+  const inv = getInv(p.ref); const here = area.tramo + '/' + area.estante;
+  pendingLocAlert = {ref:p.ref, qty, here, code:p.ref};
+  let ov = document.getElementById('locAlertOverlay');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'locAlertOverlay'; document.body.appendChild(ov); }
+  const locs = allLocations(inv);
+  ov.innerHTML = `<div class="loc-alert-box">
+      <div class="loc-alert-kick">⚠ ESTE ARTÍCULO VA EN OTRA UBICACIÓN</div>
+      <div class="loc-alert-prod"><img src="${p.img||''}" alt="" onerror="this.style.opacity=.2"><div><b>${p.title}</b><small>SKU ${p.ref}</small></div></div>
+      <div class="loc-alert-where">${locs.map(l=>`<div class="loc-alert-big">📍 ${formatLocationLabel(l)}</div>`).join('')}</div>
+      <div class="loc-alert-here">Estás contando en: <b>${formatLocationLabel(here)}</b></div>
+      <div class="loc-alert-btns">
+        <button class="la-take" onclick="resolveLocationAlert('take')">📦 Lo llevo a su ubicación<small>no se cuenta aquí</small></button>
+        <button class="la-both" onclick="resolveLocationAlert('both')">➕ Dejarlo aquí también<small>queda en las dos ubicaciones</small></button>
+        <button class="la-move" onclick="resolveLocationAlert('move')">↪ Cambiarlo a esta ubicación<small>sale de la anterior</small></button>
+      </div></div>`;
+  ov.classList.add('is-open');
+  playLocationAlertSound();
+  setTimeout(()=>{ const b = ov.querySelector('.la-take'); if(b) b.focus(); }, 50);
+}
+function resolveLocationAlert(mode){
+  const pa = pendingLocAlert; pendingLocAlert = null;
+  const ov = document.getElementById('locAlertOverlay'); if(ov) ov.classList.remove('is-open');
+  if(!pa) return;
+  const inv = getInv(pa.ref); const p = PRODUCTS_BY_REF[pa.ref];
+  if(mode === 'take'){ showToast(`Llévalo a ${allLocationsLabel(inv)} — ${p ? p.title : pa.ref}`); refocusScanInput(); return; }
+  if(mode === 'both'){ inv.extraLocations = Array.from(new Set(extraLocs(inv).concat([pa.here]))); }
+  if(mode === 'move'){ inv.location = pa.here; inv.extraLocations = extraLocs(inv).filter(l=>l !== pa.here); }
+  registerScan(pa.code, pa.qty, true);
+  refocusScanInput();
+}
+function refocusScanInput(){ const el = document.getElementById('scanInput') || document.querySelector('#inventoryOverlay input[type=text]'); if(el) setTimeout(()=>el.focus(), 30); }
+document.addEventListener('keydown', e=>{ if(pendingLocAlert && e.key === 'Escape'){ e.preventDefault(); resolveLocationAlert('take'); } }, true);
+function removeExtraLocation(ref, loc){
+  const inv = getInv(ref); inv.extraLocations = extraLocs(inv).filter(l=>l !== loc);
+  saveInventory(); renderArticleDetail(); renderProducts(); renderCatalogCards(); showToast('Ubicación quitada: ' + formatLocationLabel(loc));
+}
+
 /* ---------- Escaneo / registro ---------- */
 function findProductByCode(code){
   const lc = code.trim().toLowerCase();
@@ -4381,13 +4444,19 @@ function findProductByCode(code){
 // Escanear en Inventario YA NO suma el stock al toque — solo se va contando en la lista de
 // "esta área" (como Recepción de mercancía). El stock real recién se suma todo junto cuando
 // se presiona "Cerrar Entrada", y ahí mismo la lista queda vacía para el próximo tramo.
-function registerScan(code, qty){
+function registerScan(code, qty, decided){
   qty = Number(qty)||1;
+  if(pendingLocAlert && !decided){ playErrorSound(); showToast('Primero elige qué hacer con el artículo de la alerta de ubicación.'); return; }
   const p = findProductByCode(code);
   if(!p){ playErrorSound(); showToast('Código no encontrado en el catálogo: '+code); return; }
   const inv = getInv(p.ref);
   const area = activeArea();
-  inv.location = area.tramo + '/' + area.estante;
+  const here = area.tramo + '/' + area.estante;
+  // ¿ya tiene otra ubicación? → alerta (si no se contó ya aquí y esta área no es una de sus ubicaciones)
+  if(!decided && area.tramo && area.estante && inv.location && !allLocations(inv).includes(here) && !(Number(area.counts[p.ref]) > 0)){
+    showLocationAlert(p, qty, area); return;
+  }
+  if(!inv.location && area.tramo && area.estante) inv.location = here;
   area.counts[p.ref] = (Number(area.counts[p.ref])||0) + qty;
   lastAddedRef = p.ref;
   scanHistory.unshift({time:new Date().toLocaleTimeString('es-DO',{hour:'2-digit',minute:'2-digit',second:'2-digit'}), ref:p.ref, title:p.title, stock:inv.stock, qty});
@@ -4946,7 +5015,7 @@ function renderCatalogCards(){
           </div>
           ${barras ? `<div class="inv-barras">Barras ${barras}</div>` : ''}
           ${gtins.length ? `<div class="inv-gtin-row">${gtins.map(g=>`<span class="gtin-chip">GTIN ${g}</span>`).join('')}</div>` : ''}
-          <div class="inv-loc-tag">📍 ${formatLocationLabel(inv.location)}</div>
+          <div class="inv-loc-tag">📍 ${allLocationsLabel(inv)}</div>
           <div class="inv-article-title">${p.title}</div>
           <div class="inv-article-brand">${MARCA_FIJA} · ${p.brand}</div>
         </div>
@@ -5192,6 +5261,19 @@ function fillArticleFromPastedText(){
   if(!text){ playErrorSound(); showToast('Pegá primero el texto copiado de la página.'); return; }
   const data = parsePastedArticleText(text);
   const refEl = document.getElementById('newArtRef');
+  // si el código no tiene el formato de Diesel Technic (1.23456), se usa el SKU escrito para encontrar el nombre
+  if(!data.ref && refEl && refEl.value.trim()){
+    const sku = refEl.value.trim(); const lines = text.split('\n').map(l=>l.trim()).filter(Boolean);
+    const li = lines.findIndex(l=>l.replace(/\s+/g,'').toLowerCase().includes(sku.replace(/\s+/g,'').toLowerCase()));
+    if(li >= 0){
+      // el nombre es lo que viene DESPUÉS del código en la misma línea; si no hay, la línea siguiente
+      const pos = lines[li].toLowerCase().indexOf(sku.toLowerCase());
+      const after = pos >= 0 ? lines[li].slice(pos + sku.length).replace(/^[\s:·|\-–]+/,'').trim() : '';
+      const okName = t => t && t.length >= 3 && /[a-zà-ÿ]{3}/i.test(t) && !/^(oe|gtin|ean|barcode|código|codigo|ref)\b/i.test(t);
+      data.title = okName(after) ? after : (okName(lines[li+1]) ? lines[li+1] : '');
+    }
+    data.gtins = data.gtins.filter(g=>g !== sku.replace(/\D/g,''));
+  }
   const titleEl = document.getElementById('newArtTitle');
   const brandEl = document.getElementById('newArtBrand');
   const appsEl = document.getElementById('newArtApps');
@@ -5204,22 +5286,30 @@ function fillArticleFromPastedText(){
   if(filled.length) showToast(`Se completó desde el texto pegado: ${filled.join(', ')}. Revisá antes de guardar.`);
   else showToast('No se reconocieron datos en el texto pegado — revisá el formato o completá manualmente.');
 }
+function markFieldError(el, msg){
+  playErrorSound(); showToast(msg);
+  if(!el) return;
+  el.classList.add('field-error'); el.scrollIntoView({block:'center', behavior:'smooth'}); setTimeout(()=>el.focus(), 250);
+  el.addEventListener('input', ()=>el.classList.remove('field-error'), {once:true});
+}
 function submitNewArticle(){
   const refEl = document.getElementById('newArtRef');
   const titleEl = document.getElementById('newArtTitle');
   const ref = (refEl.value||'').trim();
   const title = (titleEl.value||'').trim();
-  if(!ref || !title){ playErrorSound(); showToast('La referencia/SKU y el nombre son obligatorios.'); return; }
+  if(!ref){ markFieldError(refEl, 'Falta la Referencia / SKU.'); return; }
+  if(!title){ markFieldError(titleEl, 'Falta el Nombre del artículo (es obligatorio).'); return; }
   // si la referencia existe pero estaba eliminada, se vuelve a crear (se quita de eliminados)
   const revive = !!PRODUCTS_BY_REF[ref] && isDeleted(ref);
-  if(PRODUCTS_BY_REF[ref] && !revive){ playErrorSound(); showToast('Ya existe un artículo con esa referencia.'); return; }
+  if(PRODUCTS_BY_REF[ref] && !revive){ markFieldError(refEl, `Ya existe un artículo con la referencia ${ref}: ${PRODUCTS_BY_REF[ref].title}. Búscalo en el catálogo.`); return; }
   const brand = (document.getElementById('newArtBrand').value||'').trim() || 'DT Spare Parts';
   const cat = (document.getElementById('newArtCat').value||'').trim() || 'Repuesto';
   const applications = (document.getElementById('newArtApps').value||'').trim();
   const gtinList = readMultiCodes('newArtGtinList');
   const badG = gtinList.filter(c=>!/^[0-9]{8,14}$/.test(c));
-  if(badG.length){ playErrorSound(); showToast('GTIN no válido (debe tener 8 a 14 dígitos): ' + badG.join(', ')); return; }
-  for(const c of gtinList){ const owner = findProductByCode(c); if(owner){ playErrorSound(); showToast(`El GTIN ${c} ya pertenece al SKU ${owner.ref}.`); return; } }
+  const gtinInput = c => [...document.querySelectorAll('#newArtGtinList input')].find(i=>i.value.trim()===c);
+  if(badG.length){ markFieldError(gtinInput(badG[0]), 'GTIN no válido (debe tener solo números, de 8 a 14 dígitos): ' + badG.join(', ') + '. Si es un número del fabricante, ponlo en "Referencia o artículo original".'); return; }
+  for(const c of gtinList){ const owner = findProductByCode(c); if(owner && owner.ref !== ref){ markFieldError(gtinInput(c), `El GTIN ${c} ya pertenece al SKU ${owner.ref} (${owner.title}).`); return; } }
   const gtin = gtinList[0] || '';
   const altCodes = gtinList.slice(1);
   const oeRefs = readMultiCodes('newArtOeList');
@@ -5308,7 +5398,7 @@ function renderArticleDetail(){
         <div class="art-head-desc">${p.applications || p.cat || ''}</div>
         <div class="art-stat-row">
           <div class="art-stat-box"><span>Existencia</span><b>${inv.stock||0}</b></div>
-          <div class="art-stat-box"><span>Ubicación actual</span><b style="font-size:.86rem;">${formatLocationLabel(inv.location)}</b></div>
+          <div class="art-stat-box"><span>Ubicación actual</span><b style="font-size:.86rem;">${formatLocationLabel(inv.location)}${extraLocs(inv).map(l=>`<br><span class="extra-loc" title="Quitar esta ubicación" onclick="removeExtraLocation('${ref}','${l}')">＋ ${formatLocationLabel(l)} ✕</span>`).join('')}</b></div>
         </div>
         <div class="art-actions-row">
           <button class="mini-btn" onclick="document.getElementById('artAddGtinInput').focus()">Agregar otro GTIN</button>

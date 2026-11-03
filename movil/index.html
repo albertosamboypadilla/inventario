@@ -81,6 +81,12 @@ nav button.on span{transform:scale(1.1)}
 .locin label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#9fb0d0}
 .locin input{font-size:20px;font-weight:700;padding:12px;border-radius:10px;border:1px solid var(--line);background:#060b18;color:#fff;width:100%;min-width:0;text-transform:uppercase}
 .locin button{padding:14px 14px;border-radius:10px;border:0;background:#1d4ed8;color:#fff;font-weight:700;font-size:15px}
+#locAlert{position:fixed;inset:0;z-index:60;background:rgba(40,10,0,.85);display:none;align-items:center;justify-content:center;padding:14px}
+#locAlert.on{display:flex;animation:laF .5s 3}@keyframes laF{50%{background:rgba(130,55,0,.9)}}
+.la-box{background:#111827;border:3px solid #f59e0b;border-radius:18px;padding:16px;width:100%;max-width:520px;display:flex;flex-direction:column;gap:8px}
+.la-kick{color:#fbbf24;font-weight:900;font-size:19px}.la-prod{display:flex;gap:10px;align-items:center}.la-prod img{width:54px;height:54px;object-fit:contain;background:#0b1120;border-radius:8px}.la-prod b{display:block}
+.la-big{font-size:30px;font-weight:900;color:#fde68a;background:#1f1300;border:2px dashed #f59e0b;border-radius:12px;padding:12px;line-height:1.1}
+.la-box .big small{display:block;font-weight:500;font-size:12px;opacity:.85}.la-take{background:#d97706 !important;color:#fff}.la-both{background:#2563eb !important;color:#fff}.la-move{background:#374151 !important;color:#fff}
 .pricebox{margin-top:14px;background:#0b1430;border:1px solid #1e3a8a;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .pricebox .pbt{font-weight:800}.pricebox label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#9fb0d0}
 .pricebox input{font-size:20px;padding:12px;border-radius:10px;border:1px solid var(--line);background:#060b18;color:#fff}
@@ -240,6 +246,15 @@ function beep(ok){
     o.start(); o.stop(actx.currentTime + (ok ? .09 : .25)); }catch(e){}
   try{ navigator.vibrate && navigator.vibrate(ok ? 40 : [60,40,60]); }catch(e){}
 }
+// alerta "va en otra ubicación": tres campanadas + vibración larga (distinta a la de OK y la de error)
+function alertBeep(){
+  try{ actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if(actx.state === 'suspended') actx.resume();
+    [0, .28, .56].forEach(t=>[[1046.5, 0], [784, .12]].forEach(([f, d])=>{ const o = actx.createOscillator(), g = actx.createGain(); o.type = 'triangle'; o.frequency.value = f; o.connect(g); g.connect(actx.destination);
+      const t0 = actx.currentTime + t + d; g.gain.setValueAtTime(.0001, t0); g.gain.linearRampToValueAtTime(.35, t0 + .015); g.gain.exponentialRampToValueAtTime(.0001, t0 + .15); o.start(t0); o.stop(t0 + .18); })); }catch(e){}
+  try{ navigator.vibrate && navigator.vibrate([250,120,250,120,250]); }catch(e){}
+}
+function locsOf(row){ const out = []; if(row && row.location) out.push(row.location); ((row && row.extraLocations) || []).forEach(l=>{ if(l && !out.includes(l)) out.push(l); }); return out; }
+function locsLabel(row){ const l = locsOf(row); return l.length ? l.map(locLabel).join('  ＋  ') : 'Sin ubicación'; }
 function setChip(state, txt){ const c = $('chip'); c.className = 'chip ' + state; c.textContent = txt; }
 function refreshChip(){
   if(!navigator.onLine) return setChip('off', ops.length ? `⚠ Sin internet · ${ops.length} pendiente(s)` : '⚠ Sin internet');
@@ -339,7 +354,11 @@ const OPS = {
       if(a.counts[o.ref] <= 0) delete a.counts[o.ref];
       if(o.qty > 0){ m.scanHistory = [{time:o.time, ref:o.ref, title:o.title, stock:o.stock, qty:o.qty}].concat(m.scanHistory||[]).slice(0,50); }
       return m; },
-    inv(r, o){ if(o.qty <= 0) return null; r = r || defaultRow(o.ref); r.location = o.tramo + '/' + o.estante; return r; }
+    inv(r, o){ if(o.qty <= 0) return null; r = r || defaultRow(o.ref); const here = o.tramo + '/' + o.estante;
+      if(o.locMode === 'both'){ if(r.location && r.location !== here){ r.extraLocations = [...new Set((r.extraLocations||[]).concat([here]))]; } else r.location = here; }
+      else if(o.locMode === 'move'){ r.location = here; r.extraLocations = (r.extraLocations||[]).filter(l=>l !== here); }
+      else if(!r.location) r.location = here;
+      return r; }
   },
   // fijar la cantidad contada (lo que se escribe en la lista)
   setCount: {
@@ -455,14 +474,34 @@ function handleCode(code, source){
   if(currentTab === 'inv'){
     const a = areaSel(); if(!a){ beep(false); toast('Primero elige o crea un área (tramo/estante).', 'bad'); return; }
     const qty = Math.max(1, Number($('qtyInv').value)||1);
-    const row = view().inv[p.ref];
-    queue({t:'count', ref:p.ref, qty, tramo:a.tramo, estante:a.estante, title:p.title, stock:row ? row.stock : 0, time: now.toLocaleTimeString('es-DO',{hour:'2-digit',minute:'2-digit',second:'2-digit'})});
-    beep(true); showLast('inv', p);
+    const v = view(); const row = v.inv[p.ref]; const here = a.tramo + '/' + a.estante;
+    const ar = v.meta && v.meta.countAreas && v.meta.countAreas.find(x=>x.tramo === a.tramo && x.estante === a.estante);
+    const yaAqui = ar && ar.counts && Number(ar.counts[p.ref]) > 0;
+    const op = {t:'count', ref:p.ref, qty, tramo:a.tramo, estante:a.estante, title:p.title, stock:row ? row.stock : 0, time: now.toLocaleTimeString('es-DO',{hour:'2-digit',minute:'2-digit',second:'2-digit'})};
+    if(locAlertOp){ beep(false); toast('Primero elige qué hacer con la alerta de ubicación.', 'bad'); return; }
+    if(row && row.location && !locsOf(row).includes(here) && !yaAqui){ showLocAlert(p, row, here, op); return; }
+    queue(op); beep(true); showLast('inv', p);
   } else if(currentTab === 'rec'){
     const qty = Math.max(1, Number($('qtyRec').value)||1);
     queue({t:'recv', ref:p.ref, qty, at: now.toISOString()});
     beep(true); showLast('rec', p);
   }
+}
+let locAlertOp = null;
+function showLocAlert(p, row, here, op){
+  locAlertOp = op; let ov = $('locAlert');
+  if(!ov){ ov = document.createElement('div'); ov.id = 'locAlert'; document.body.appendChild(ov); }
+  ov.innerHTML = `<div class="la-box"><div class="la-kick">⚠ VA EN OTRA UBICACIÓN</div>
+    <div class="la-prod"><img src="${esc(imgOf(p))}" onerror="this.src='${PH}'"><div><b>${esc(p.title)}</b><span class="mut">${esc(p.ref)}</span></div></div>
+    ${locsOf(row).map(l=>`<div class="la-big">📍 ${esc(locLabel(l))}</div>`).join('')}
+    <div class="mut" style="margin:8px 0 14px">Estás contando en: <b style="color:#fff">${esc(locLabel(here))}</b></div>
+    <button class="big la-take" data-la="take">📦 Lo llevo a su ubicación<small>no se cuenta aquí</small></button>
+    <button class="big la-both" data-la="both">➕ Dejarlo aquí también<small>queda en las dos ubicaciones</small></button>
+    <button class="big la-move" data-la="move">↪ Cambiarlo a esta ubicación<small>sale de la anterior</small></button></div>`;
+  ov.classList.add('on'); alertBeep();
+  ov.onclick = e=>{ const b = e.target.closest('[data-la]'); if(!b) return; const mode = b.dataset.la; const o = locAlertOp; locAlertOp = null; ov.classList.remove('on');
+    if(mode === 'take'){ toast('Llévalo a ' + locsLabel(row), 'ok'); return; }
+    o.locMode = mode; queue(o); beep(true); showLast('inv', BY_REF[o.ref]); };
 }
 function showLast(kind, p){
   const v = view(); let n = 0, label = '';
@@ -751,7 +790,7 @@ function render(){
 function isEditing(listId){ const a = document.activeElement; return a && a.tagName === 'INPUT' && $(listId).contains(a); }
 function itemHtml(ref, qty, kind){
   const p = BY_REF[ref] || {ref, title:ref, brand:''}; const row = view().inv[ref];
-  const loc = row && row.location ? ` · 📍 ${esc(locLabel(row.location))}` : '';
+  const loc = row && row.location ? ` · 📍 ${esc(locsLabel(row))}` : '';
   const pr = isAdmin() && row && row.price !== '' && row.price != null ? ` · 💲${Number(row.price).toLocaleString('es-DO')}` : '';
   return `<div class="item"><img src="${esc(imgOf(p))}" loading="lazy" onerror="this.src='${PH}'" data-open="${esc(ref)}"><div class="info" data-open="${esc(ref)}"><b>${esc(p.title)}</b><span class="mut">${esc(ref)}${loc}${pr}</span>${isAdmin() ? '<span class="edithint">✏️ Toca para poner costo y precio</span>' : ''}</div>
     <input type="number" inputmode="numeric" min="0" value="${qty}" data-set="${kind}" data-ref="${esc(ref)}"><button data-del="${kind}" data-ref="${esc(ref)}">🗑</button></div>`;
@@ -781,7 +820,7 @@ function doSearch(more){
   const head = `<div class="mut" style="margin:2px 4px 8px">${res.length.toLocaleString('es-DO')} artículo(s)${q ? ` para “${esc(q)}”` : ''} · <b style="color:#86efac">${enStock.toLocaleString('es-DO')} en stock</b> (primero)</div>`;
   const shown = res.slice(0, busShown);
   out.innerHTML = res.length ? head + shown.map(p=>{ const n = st.get(p.ref); const cls = n <= 0 ? 's0' : n <= 3 ? 's1' : 's2'; const row = v.inv[p.ref];
-      const loc = isGuest() ? '' : `<span class="locline${row && row.location ? '' : ' none'}">📍 ${esc(row && row.location ? locLabel(row.location) : 'Sin ubicación')}</span>`;
+      const loc = isGuest() ? '' : `<span class="locline${row && row.location ? '' : ' none'}">📍 ${esc(row && row.location ? locsLabel(row) : 'Sin ubicación')}</span>`;
       return `<div class="res" data-open="${esc(p.ref)}"><img src="${esc(imgOf(p))}" loading="lazy" onerror="this.src='${PH}'"><div class="info"><b>${esc(p.title)}</b><span class="mut">${esc(p.ref)} · ${esc(p.brand)}</span>${loc}</div><div class="stock ${cls}">${n > 0 ? n : 'Agotado'}<small>${n > 0 ? 'en stock' : ''}</small></div></div>`; }).join('')
       + (res.length > busShown ? `<button class="big" id="busMore">Ver más (${(res.length - busShown).toLocaleString('es-DO')} restantes)</button>` : '')
     : `<div class="empty">Sin resultados para “${esc(q)}”.</div>`;
@@ -805,11 +844,11 @@ function openDetail(ref){
   const money = x=> x === '' || x == null ? '—' : 'US$ ' + Number(x).toLocaleString('es-DO', {minimumFractionDigits:2, maximumFractionDigits:2});
   $('sheetIn').innerHTML = `<img src="${esc(imgOf(p).replace('width=240','width=600'))}" onerror="this.src='${PH}'">
     <h3 style="margin:12px 0 2px">${esc(p.title)}</h3><div class="mut">${esc(p.brand)} · ${esc(p.cat)} · ${esc(ref)}</div>
-    <div class="locbig${row.location ? '' : ' none'}"><span>📍</span><div><small>UBICACIÓN</small><b>${esc(locLabel(row.location))}</b></div><div class="st"><small>STOCK</small><b>${Number(row.stock)||0}</b></div></div>
+    <div class="locbig${row.location ? '' : ' none'}"><span>📍</span><div><small>UBICACIÓN</small><b>${locsOf(row).length ? locsOf(row).map(l=>esc(locLabel(l))).join('<br>') : esc(locLabel(''))}</b></div><div class="st"><small>STOCK</small><b>${Number(row.stock)||0}</b></div></div>
     <table>
       <tr><td>Referencia / SKU</td><td><b>${esc(ref)}</b></td></tr>
       <tr><td>Stock</td><td><b>${Number(row.stock)||0}</b></td></tr>
-      <tr><td>Ubicación</td><td>${esc(locLabel(row.location))}</td></tr>
+      <tr><td>Ubicación</td><td>${locsOf(row).length ? locsOf(row).map(l=>esc(locLabel(l))).join('<br>') : esc(locLabel(''))}</td></tr>
       ${canEditPrice() ? '' : `<tr><td>Precio</td><td>${money(row.price)}</td></tr>`}
       ${canCost() && !canEditPrice() ? `<tr><td>Costo</td><td>${money(row.cost)}</td></tr>` : ''}
       <tr><td>Código Zebra</td><td>${esc(ic[ref] || '—')}</td></tr>
