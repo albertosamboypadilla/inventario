@@ -969,6 +969,9 @@ button{font-family:inherit;}
 
 /* ===== FICHA DE ARTÍCULO (detalle al tocar un artículo del catálogo) ===== */
 #articleDetailOverlay,#addArticleOverlay{z-index:95;}
+.et-switch{border:2px solid #475569;background:#1e293b;color:#cbd5e1;border-radius:999px;padding:9px 16px;font-weight:700;font-size:.85rem;cursor:pointer}
+.et-switch.on{background:#14532d;border-color:#22c55e;color:#dcfce7}.et-switch b{letter-spacing:.04em}
+.et-copies-lbl{display:flex;gap:6px;align-items:center;font-weight:700}.et-copies{width:64px;padding:7px;border-radius:8px;border:1px solid #334155;background:#0d1a30;color:#fff;font-size:1rem;text-align:center}
 .et-print-toggle{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 4px;font-size:.8rem;color:#c1d8ff}.et-print-toggle label{display:flex;gap:6px;align-items:center;cursor:pointer}
 #locAlertOverlay{position:fixed;inset:0;z-index:99990;background:rgba(40,10,0,.78);display:none;align-items:center;justify-content:center;padding:20px}
 #locAlertOverlay.is-open{display:flex;animation:laFlash .5s ease-in-out 3}
@@ -5698,7 +5701,14 @@ function renderZplPreview(){
 }
 /* ===== Etiqueta Zebra LP 2824 Plus (2" x 1", 203 dpi = 406 x 203 puntos): SKU en grande ===== */
 function etAscii(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\x20-\x7E]/g,'').replace(/[\^~\\]/g,' ').trim(); }
-function etSkuLabelZpl(sku, title){
+function etCopies(){ try{ return Math.max(1, Math.min(50, parseInt(localStorage.getItem('et_copies'), 10) || 1)); }catch(e){ return 1; } }
+function etSetCopies(n){ n = Math.max(1, Math.min(50, parseInt(n, 10) || 1)); try{ localStorage.setItem('et_copies', String(n)); }catch(e){} document.querySelectorAll('.et-copies').forEach(i=>{ if(document.activeElement !== i) i.value = n; }); }
+function etToggleHtml(){
+  const on = etAutoPrintOn();
+  return `<button type="button" class="et-switch ${on ? 'on' : ''}" onclick="etSetAutoPrint(!etAutoPrintOn())">🖨 Etiqueta: <b>${on ? 'ACTIVADA' : 'DESACTIVADA'}</b></button>
+    <label class="et-copies-lbl">Etiquetas por SKU <input type="number" class="et-copies" min="1" max="50" value="${etCopies()}" inputmode="numeric" onchange="etSetCopies(this.value)" oninput="etSetCopies(this.value)"></label>`;
+}
+function etSkuLabelZpl(sku, title, copias){
   sku = etAscii(sku) || '?'; const n = sku.length;
   const w = Math.max(34, Math.min(140, Math.floor(384 / (n * 0.66))));   // ancho de letra para que quepa en 2"
   const h = 140;                                                         // alto de letra (grande)
@@ -5706,17 +5716,19 @@ function etSkuLabelZpl(sku, title){
   return ['^XA','^CI0','^PW406','^LL203','^LH0,0','^PR3',
     `^FO8,12^FB390,1,0,C,0^A0N,${h},${w}^FD${sku}^FS`,
     name ? `^FO8,166^FB390,1,0,C,0^A0N,26,22^FD${name}^FS` : '',
-    '^PQ1,0,1,Y','^XZ'].filter(Boolean).join('\n');
+    `^PQ${Math.max(1, Math.min(50, copias || 1))},0,1,Y`,'^XZ'].filter(Boolean).join('\n');
 }
 function etAutoPrintOn(){ try{ return localStorage.getItem('et_autoprint') !== 'off'; }catch(e){ return true; } }
-function etSetAutoPrint(on){ try{ localStorage.setItem('et_autoprint', on ? 'on' : 'off'); }catch(e){} document.querySelectorAll('.et-autoprint').forEach(c=>c.checked = !!on); }
+function etSetAutoPrint(on){ try{ localStorage.setItem('et_autoprint', on ? 'on' : 'off'); }catch(e){}
+  document.querySelectorAll('.et-switch').forEach(b=>{ b.classList.toggle('on', !!on); b.innerHTML = '🖨 Etiqueta: <b>' + (on ? 'ACTIVADA' : 'DESACTIVADA') + '</b>'; });
+  document.querySelectorAll('.et-autoprint').forEach(c=>c.checked = !!on); }
 
 async function etPrintSku(ref, auto){
   const p = PRODUCTS_BY_REF[ref]; if(!p) return;
   const sv = srvSettings();
   if(!sv.url || !sv.token){ if(!auto){ playErrorSound(); showToast('Para imprimir hay que iniciar sesión (conectado al servidor).'); } return; }
   try{
-    const r = await fetch(sv.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + sv.token}, body: JSON.stringify({zpl: etSkuLabelZpl(p.sku || p.ref, p.title)})});
+    const r = await fetch(sv.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + sv.token}, body: JSON.stringify({zpl: etSkuLabelZpl(p.sku || p.ref, p.title, auto ? etCopies() : 1)})});
     const j = await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(j.error || ('error ' + r.status));
     if(!auto) showToast('🖨 Etiqueta impresa: ' + (p.sku || p.ref));
@@ -5727,8 +5739,7 @@ function etMountToggles(){
     const inp = document.getElementById(id); if(!inp || document.getElementById('etTg_' + id)) return;
     const box = inp.closest('.scan-box, .scan-row, div') || inp.parentElement; const host = box.parentElement || box;
     const d = document.createElement('div'); d.id = 'etTg_' + id; d.className = 'et-print-toggle';
-    d.innerHTML = `<label><input type="checkbox" class="et-autoprint" ${etAutoPrintOn() ? 'checked' : ''} onchange="etSetAutoPrint(this.checked)"> 🖨 Imprimir etiqueta Zebra (SKU grande) al registrar cada SKU</label>
-      <button type="button" class="mini-btn" onclick="etTestPrint()">Probar impresora</button>`;
+    d.innerHTML = etToggleHtml() + `<button type="button" class="mini-btn" onclick="etTestPrint()">Probar impresora</button><small style="color:#8b96ab">Se imprime al registrar cada SKU por primera vez</small>`;
     host.insertBefore(d, box.nextSibling);
   });
 }

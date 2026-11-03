@@ -87,7 +87,10 @@ nav button.on span{transform:scale(1.1)}
 .la-kick{color:#fbbf24;font-weight:900;font-size:19px}.la-prod{display:flex;gap:10px;align-items:center}.la-prod img{width:54px;height:54px;object-fit:contain;background:#0b1120;border-radius:8px}.la-prod b{display:block}
 .la-big{font-size:30px;font-weight:900;color:#fde68a;background:#1f1300;border:2px dashed #f59e0b;border-radius:12px;padding:12px;line-height:1.1}
 .la-box .big small{display:block;font-weight:500;font-size:12px;opacity:.85}.la-take{background:#d97706 !important;color:#fff}.la-both{background:#2563eb !important;color:#fff}.la-move{background:#374151 !important;color:#fff}
-.etp{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:13px;color:#9fb0d0}.etp input{width:20px;height:20px}
+.etp{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px;font-size:14px;color:#cbd5e1}
+.et-switch{border:2px solid #475569;background:#1e293b;color:#cbd5e1;border-radius:999px;padding:11px 16px;font-weight:700;font-size:15px}
+.et-switch.on{background:#14532d;border-color:#22c55e;color:#dcfce7}
+.et-copies-lbl{display:flex;gap:8px;align-items:center;font-weight:700}.et-copies{width:70px;padding:10px;border-radius:10px;border:1px solid var(--line);background:#060b18;color:#fff;font-size:18px;text-align:center}
 .pricebox{margin-top:14px;background:#0b1430;border:1px solid #1e3a8a;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .pricebox .pbt{font-weight:800}.pricebox label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#9fb0d0}
 .pricebox input{font-size:20px;padding:12px;border-radius:10px;border:1px solid var(--line);background:#060b18;color:#fff}
@@ -160,7 +163,7 @@ nav button.on span{transform:scale(1.1)}
         <button class="cam" data-cam="inv" title="Escanear con la cámara">📷</button><button class="foto" data-foto title="Tomar foto del código">📸</button>
       </div>
       <div class="qty"><button data-q="-1">−</button><input id="qtyInv" type="number" min="1" value="1"><button data-q="1">＋</button><span>unidades por lectura</span></div>
-      <label class="etp"><input type="checkbox" class="et-autoprint" onchange="etSetAutoPrint(this.checked)"> 🖨 Imprimir etiqueta Zebra (SKU grande) al registrar cada SKU</label>
+      <div class="etp et-slot"></div>
     </div>
     <div class="card" id="lastInv" style="display:none"></div>
     <div class="card">
@@ -179,7 +182,7 @@ nav button.on span{transform:scale(1.1)}
         <button class="cam" data-cam="rec" title="Escanear con la cámara">📷</button><button class="foto" data-foto title="Tomar foto del código">📸</button>
       </div>
       <div class="qty"><button data-q="-1">−</button><input id="qtyRec" type="number" min="1" value="1"><button data-q="1">＋</button><span>unidades por lectura</span></div>
-      <label class="etp"><input type="checkbox" class="et-autoprint" onchange="etSetAutoPrint(this.checked)"> 🖨 Imprimir etiqueta Zebra (SKU grande) al registrar cada SKU</label>
+      <div class="etp et-slot"></div>
     </div>
     <div class="card" id="lastRec" style="display:none"></div>
     <div class="card">
@@ -514,7 +517,14 @@ function showLocAlert(p, row, here, op){
 }
 /* ===== Etiqueta Zebra LP 2824 Plus (2" x 1", 203 dpi = 406 x 203 puntos): SKU en grande ===== */
 function etAscii(s){ return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\x20-\x7E]/g,'').replace(/[\^~\\]/g,' ').trim(); }
-function etSkuLabelZpl(sku, title){
+function etCopies(){ try{ return Math.max(1, Math.min(50, parseInt(localStorage.getItem('et_copies'), 10) || 1)); }catch(e){ return 1; } }
+function etSetCopies(n){ n = Math.max(1, Math.min(50, parseInt(n, 10) || 1)); try{ localStorage.setItem('et_copies', String(n)); }catch(e){} document.querySelectorAll('.et-copies').forEach(i=>{ if(document.activeElement !== i) i.value = n; }); }
+function etToggleHtml(){
+  const on = etAutoPrintOn();
+  return `<button type="button" class="et-switch ${on ? 'on' : ''}" onclick="etSetAutoPrint(!etAutoPrintOn())">🖨 Etiqueta: <b>${on ? 'ACTIVADA' : 'DESACTIVADA'}</b></button>
+    <label class="et-copies-lbl">Etiquetas por SKU <input type="number" class="et-copies" min="1" max="50" value="${etCopies()}" inputmode="numeric" onchange="etSetCopies(this.value)" oninput="etSetCopies(this.value)"></label>`;
+}
+function etSkuLabelZpl(sku, title, copias){
   sku = etAscii(sku) || '?'; const n = sku.length;
   const w = Math.max(34, Math.min(140, Math.floor(384 / (n * 0.66))));   // ancho de letra para que quepa en 2"
   const h = 140;                                                         // alto de letra (grande)
@@ -522,16 +532,18 @@ function etSkuLabelZpl(sku, title){
   return ['^XA','^CI0','^PW406','^LL203','^LH0,0','^PR3',
     `^FO8,12^FB390,1,0,C,0^A0N,${h},${w}^FD${sku}^FS`,
     name ? `^FO8,166^FB390,1,0,C,0^A0N,26,22^FD${name}^FS` : '',
-    '^PQ1,0,1,Y','^XZ'].filter(Boolean).join('\n');
+    `^PQ${Math.max(1, Math.min(50, copias || 1))},0,1,Y`,'^XZ'].filter(Boolean).join('\n');
 }
 function etAutoPrintOn(){ try{ return localStorage.getItem('et_autoprint') !== 'off'; }catch(e){ return true; } }
-function etSetAutoPrint(on){ try{ localStorage.setItem('et_autoprint', on ? 'on' : 'off'); }catch(e){} document.querySelectorAll('.et-autoprint').forEach(c=>c.checked = !!on); }
+function etSetAutoPrint(on){ try{ localStorage.setItem('et_autoprint', on ? 'on' : 'off'); }catch(e){}
+  document.querySelectorAll('.et-switch').forEach(b=>{ b.classList.toggle('on', !!on); b.innerHTML = '🖨 Etiqueta: <b>' + (on ? 'ACTIVADA' : 'DESACTIVADA') + '</b>'; });
+  document.querySelectorAll('.et-autoprint').forEach(c=>c.checked = !!on); }
 
 async function etPrintSku(ref, auto){
   const p = BY_REF[ref]; if(!p) return;
   if(!cfg.token || !navigator.onLine){ if(!auto) toast('Para imprimir necesitas internet y sesión iniciada.', 'bad'); return; }
   try{
-    const r = await fetch(cfg.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({zpl: etSkuLabelZpl(p.ref, p.title)})});
+    const r = await fetch(cfg.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({zpl: etSkuLabelZpl(p.ref, p.title, auto ? etCopies() : 1)})});
     const j = await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error || ('error ' + r.status));
     if(!auto) toast('🖨 Etiqueta impresa: ' + p.ref, 'ok');
   }catch(e){ beep(false); toast('🖨 No se pudo imprimir: ' + e.message, 'bad'); }
@@ -1022,7 +1034,7 @@ $('closeInv').onclick = ()=>closeEntry('inv');
 $('closeRec').onclick = ()=>closeEntry('rec');
 $('lbtn').onclick = doLogin;
 $('gbtn').onclick = ()=> startGuest();
-document.querySelectorAll('.et-autoprint').forEach(c=>c.checked = etAutoPrintOn());
+document.querySelectorAll('.et-slot').forEach(d=>d.innerHTML = etToggleHtml());
 let _moreObs = ('IntersectionObserver' in window) ? new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting && e.target.id === 'busMore' && currentTab === 'bus'){ busShown += 60; doSearch(true); } }); }, {rootMargin:'0px 0px 300px 0px'}) : null;
 new MutationObserver(()=>{ const b = document.getElementById('busMore'); if(b && _moreObs && !b._obs){ b._obs = 1; _moreObs.observe(b); } }).observe(document.getElementById('listBus'), {childList:true}); $('lp').addEventListener('keydown', e=>{ if(e.key === 'Enter') doLogin(); });
 document.querySelectorAll('button.cam').forEach(b=> b.onclick = ()=>{ if(camOn) stopCam(); else startCam(); });
