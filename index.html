@@ -867,6 +867,9 @@ button{font-family:inherit;}
 
 .inv-count-list-wrap{margin-bottom:16px;}
 .inv-count-list{display:flex;flex-direction:column;gap:8px;max-height:280px;overflow:auto;}
+#countedItemsList{max-height:62vh;}
+.low-stock-details summary::-webkit-details-marker{display:none}.low-stock-details[open] .ls-arrow{transform:rotate(90deg)}.ls-arrow{display:inline-block;transition:transform .15s}
+.low-stock-details:not([open]){padding-bottom:6px}
 .inv-counted-row{display:flex;align-items:center;gap:10px;padding:9px 10px;background:rgba(18,26,44,.5);border:1px solid rgba(91,132,204,.2);border-radius:8px;transition:background .8s ease,border-color .8s ease;}
 .inv-counted-row.is-new-scan{background:rgba(0,207,133,.22);border-color:rgba(0,207,133,.5);}
 .inv-counted-row.is-low-stock{background:rgba(255,42,58,.16);border-color:rgba(255,42,58,.4);}
@@ -972,6 +975,8 @@ button{font-family:inherit;}
 .et-switch{border:2px solid #475569;background:#1e293b;color:#cbd5e1;border-radius:999px;padding:9px 16px;font-weight:700;font-size:.85rem;cursor:pointer}
 .et-switch.on{background:#14532d;border-color:#22c55e;color:#dcfce7}.et-switch b{letter-spacing:.04em}
 .et-copies-lbl{display:flex;gap:6px;align-items:center;font-weight:700}.et-copies{width:64px;padding:7px;border-radius:8px;border:1px solid #334155;background:#0d1a30;color:#fff;font-size:1rem;text-align:center}
+.et-fields{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;width:100%;color:#8b96ab;font-size:.78rem}.et-f{display:flex;gap:5px;align-items:center;color:#dbe7ff;cursor:pointer}
+.et-prev-wrap{display:flex;flex-direction:column;gap:4px;color:#8b96ab;font-size:.7rem}.et-prev{position:relative;background:#fff;color:#000;border-radius:6px;font-family:Arial,Helvetica,sans-serif;box-shadow:0 0 0 1px #94a3b8}
 .et-print-toggle{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:8px 0 4px;font-size:.8rem;color:#c1d8ff}.et-print-toggle label{display:flex;gap:6px;align-items:center;cursor:pointer}
 #locAlertOverlay{position:fixed;inset:0;z-index:99990;background:rgba(40,10,0,.78);display:none;align-items:center;justify-content:center;padding:20px}
 #locAlertOverlay.is-open{display:flex;animation:laFlash .5s ease-in-out 3}
@@ -1659,11 +1664,13 @@ body{overflow-x:hidden;}
       <div id="countedItemsList" class="inv-count-list"></div>
     </div>
 
-    <div class="inv-count-list-wrap">
-      <div class="inv-section-kicker" style="color:#ff8a93;">⚠ PEDIDO BAJO STOCK</div>
+    <details class="inv-count-list-wrap low-stock-details" id="lowStockDetails" ontoggle="try{localStorage.setItem('et_lowstock_open', this.open ? '1' : '0')}catch(e){}">
+      <summary class="inv-section-kicker" style="color:#ff8a93;cursor:pointer;list-style:none;display:flex;align-items:center;gap:8px;">
+        <span class="ls-arrow">▶</span> ⚠ PEDIDO BAJO STOCK <span style="color:#8b96ab;font-weight:500;letter-spacing:0;text-transform:none">— toca para abrir / cerrar</span>
+      </summary>
       <div id="lowStockList" class="inv-count-list"></div>
       <div id="lowStockPagination" class="inv-pagination"></div>
-    </div>
+    </details>
 
     <div class="inv-section-box inv-salida-box">
       <div class="inv-section-kicker">SALIDA POR VENTA</div>
@@ -5706,29 +5713,67 @@ function etSetCopies(n){ n = Math.max(1, Math.min(50, parseInt(n, 10) || 1)); tr
 function etToggleHtml(){
   const on = etAutoPrintOn();
   return `<button type="button" class="et-switch ${on ? 'on' : ''}" onclick="etSetAutoPrint(!etAutoPrintOn())">🖨 Etiqueta: <b>${on ? 'ACTIVADA' : 'DESACTIVADA'}</b></button>
-    <label class="et-copies-lbl">Etiquetas por SKU <input type="number" class="et-copies" min="1" max="50" value="${etCopies()}" inputmode="numeric" onchange="etSetCopies(this.value)" oninput="etSetCopies(this.value)"></label>`;
+    <label class="et-copies-lbl">Etiquetas por SKU <input type="number" class="et-copies" min="1" max="50" value="${etCopies()}" inputmode="numeric" onchange="etSetCopies(this.value)" oninput="etSetCopies(this.value)"></label>` + etFieldsHtml();
 }
-function etSkuLabelZpl(sku, title, copias){
-  sku = etAscii(sku) || '?'; const n = sku.length;
-  const w = Math.max(34, Math.min(140, Math.floor(384 / (n * 0.66))));   // ancho de letra para que quepa en 2"
-  const h = 140;                                                         // alto de letra (grande)
-  const name = etAscii(title).slice(0, 34);
-  return ['^XA','^CI0','^PW406','^LL203','^LH0,0','^PR3',
-    `^FO8,12^FB390,1,0,C,0^A0N,${h},${w}^FD${sku}^FS`,
-    name ? `^FO8,166^FB390,1,0,C,0^A0N,26,22^FD${name}^FS` : '',
-    `^PQ${Math.max(1, Math.min(50, copias || 1))},0,1,Y`,'^XZ'].filter(Boolean).join('\n');
+function etFields(){ const d = {sku:true, name:true, brand:false, barcode:false, oe:false}; try{ return Object.assign(d, JSON.parse(localStorage.getItem('et_fields') || '{}')); }catch(e){ return d; } }
+function etSetField(k, on){ const f = etFields(); f[k] = !!on; try{ localStorage.setItem('et_fields', JSON.stringify(f)); }catch(e){} document.querySelectorAll('.et-f-' + k).forEach(c=>c.checked = !!on); etRefreshPreviews(); }
+// Acomoda lo elegido en la etiqueta de 2" x 1" (406 x 203 puntos a 203 dpi)
+function etLayout(d){
+  const f = etFields(); const W = 406, M = 6; let usable = 203 - 2 * M;
+  const sku = etAscii(d.sku) || '?';
+  const smalls = [];
+  if(f.oe && d.oe) smalls.push({k:'oe', t:'Ref: ' + etAscii(d.oe)});
+  if(f.brand && d.brand) smalls.push({k:'brand', t:etAscii(d.brand)});
+  if(f.name && d.title) smalls.push({k:'name', t:etAscii(d.title)});
+  const showSku = f.sku || (!smalls.length && !(f.barcode && d.barcode));
+  const bc = f.barcode && d.barcode ? etAscii(d.barcode) : '';
+  const sFont = showSku ? 22 : 30, sLine = sFont + 4;
+  const bcH = bc ? (showSku ? 38 : 70) : 0, bcBlock = bc ? bcH + 24 : 0;
+  let skuH = showSku ? Math.max(40, Math.min(140, usable - smalls.length * sLine - bcBlock - 2)) : 0;
+  // si no cabe, se achican las líneas chicas
+  let sl = sLine, sf = sFont;
+  while(showSku && usable - smalls.length * sl - bcBlock - 2 < 40 && sf > 16){ sf -= 2; sl = sf + 3; skuH = Math.max(40, Math.min(140, usable - smalls.length * sl - bcBlock - 2)); }
+  const items = []; let y = M;
+  if(showSku){ const w = Math.max(24, Math.min(Math.round(skuH * 0.9), Math.floor(390 / (sku.length * 0.62)))); items.push({type:'text', y, h:skuH, w, t:sku, big:true}); y += skuH + 2; }
+  smalls.forEach(s=>{ const maxCh = Math.floor(390 / (sf * 0.5)); items.push({type:'text', y, h:sf, w:Math.round(sf * 0.85), t:s.t.slice(0, maxCh), k:s.k}); y += sl; });
+  if(bc){ const mod = (11 * bc.length + 35) * 2 > 390 ? 1 : 2; const est = (11 * bc.length + 35) * mod; items.push({type:'barcode', y, h:bcH, t:bc, mod, x:Math.max(M, Math.round((W - est) / 2))}); }
+  return items;
+}
+function etLabelZpl(d, copias){
+  const L = ['^XA','^CI0','^PW406','^LL203','^LH0,0','^PR3'];
+  etLayout(d).forEach(it=>{
+    if(it.type === 'text') L.push(`^FO8,${it.y}^FB390,1,0,C,0^A0N,${it.h},${it.w}^FD${it.t}^FS`);
+    else L.push(`^FO${it.x},${it.y}^BY${it.mod},2.5,${it.h}^BCN,${it.h},Y,N,N^FD${it.t}^FS`);
+  });
+  L.push(`^PQ${Math.max(1, Math.min(50, copias || 1))},0,1,Y`, '^XZ');
+  return L.join('\n');
+}
+function etSkuLabelZpl(sku, title, copias){ return etLabelZpl({sku, title}, copias); }
+function etPreviewHtml(d){
+  const k = 0.62;  // escala de la vista previa
+  return `<div class="et-prev" style="width:${Math.round(406*k)}px;height:${Math.round(203*k)}px">` + etLayout(d).map(it=> it.type === 'text'
+    ? `<div style="position:absolute;left:0;right:0;top:${Math.round(it.y*k)}px;height:${Math.round(it.h*k)}px;font-size:${Math.round(it.h*k*0.86)}px;line-height:${Math.round(it.h*k)}px;font-weight:${it.big ? 800 : 600};text-align:center;white-space:nowrap;overflow:hidden;${it.big ? 'transform:scaleX(.9)' : ''}">${it.t.replace(/</g,'&lt;')}</div>`
+    : `<div style="position:absolute;left:${Math.round(it.x*k)}px;top:${Math.round(it.y*k)}px;height:${Math.round(it.h*k)}px;width:${Math.round((11*it.t.length+35)*it.mod*k)}px;background:repeating-linear-gradient(90deg,#000 0 2px,#fff 2px 3px,#000 3px 4px,#fff 4px 6px)"></div><div style="position:absolute;left:0;right:0;top:${Math.round((it.y+it.h+2)*k)}px;font-size:${Math.round(18*k)}px;text-align:center">${it.t}</div>`).join('') + `</div>`;
+}
+function etFieldsHtml(){
+  const f = etFields(); const c = (k, t)=>`<label class="et-f"><input type="checkbox" class="et-f-${k}" ${f[k] ? 'checked' : ''} onchange="etSetField('${k}', this.checked)"> ${t}</label>`;
+  return `<div class="et-fields">Incluir en la etiqueta: ${c('sku','SKU (grande)')}${c('name','Nombre')}${c('brand','Marca')}${c('barcode','Código de barras del sistema')}${c('oe','Ref. / artículo original')}</div><div class="et-prev-wrap"></div>`;
 }
 function etAutoPrintOn(){ try{ return localStorage.getItem('et_autoprint') !== 'off'; }catch(e){ return true; } }
 function etSetAutoPrint(on){ try{ localStorage.setItem('et_autoprint', on ? 'on' : 'off'); }catch(e){}
   document.querySelectorAll('.et-switch').forEach(b=>{ b.classList.toggle('on', !!on); b.innerHTML = '🖨 Etiqueta: <b>' + (on ? 'ACTIVADA' : 'DESACTIVADA') + '</b>'; });
   document.querySelectorAll('.et-autoprint').forEach(c=>c.checked = !!on); }
 
+function etDataFor(ref){ const p = PRODUCTS_BY_REF[ref] || {ref}; return {sku: p.sku || p.ref, title: p.title || '', brand: p.brand || '', barcode: getInternalCode(ref), oe: (p.refsList || [])[0] || ''}; }
+function etSample(){ const r = (typeof lastAddedRef !== 'undefined' && lastAddedRef && PRODUCTS_BY_REF[lastAddedRef]) ? lastAddedRef : null;
+  return r ? etDataFor(r) : {sku:'1.24265', title:'Torica, bomba de aceite', brand:'Scania', barcode:'00123', oe:'Scania:1411851'}; }
+function etRefreshPreviews(){ const d = etSample(); document.querySelectorAll('.et-prev-wrap').forEach(w=>w.innerHTML = '<small>Vista previa (2" x 1"):</small>' + etPreviewHtml(d)); }
 async function etPrintSku(ref, auto){
   const p = PRODUCTS_BY_REF[ref]; if(!p) return;
   const sv = srvSettings();
   if(!sv.url || !sv.token){ if(!auto){ playErrorSound(); showToast('Para imprimir hay que iniciar sesión (conectado al servidor).'); } return; }
   try{
-    const r = await fetch(sv.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + sv.token}, body: JSON.stringify({zpl: etSkuLabelZpl(p.sku || p.ref, p.title, auto ? etCopies() : 1)})});
+    const r = await fetch(sv.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + sv.token}, body: JSON.stringify({zpl: etLabelZpl(etDataFor(ref), auto ? etCopies() : 1)})});
     const j = await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(j.error || ('error ' + r.status));
     if(!auto) showToast('🖨 Etiqueta impresa: ' + (p.sku || p.ref));
@@ -5742,16 +5787,17 @@ function etMountToggles(){
     d.innerHTML = etToggleHtml() + `<button type="button" class="mini-btn" onclick="etTestPrint()">Probar impresora</button><small style="color:#8b96ab">Se imprime al registrar cada SKU por primera vez</small>`;
     host.insertBefore(d, box.nextSibling);
   });
+  etRefreshPreviews();
 }
 async function etTestPrint(){
   const sv = srvSettings(); if(!sv.url || !sv.token){ playErrorSound(); showToast('Inicia sesión para usar la impresora.'); return; }
   try{
-    const r = await fetch(sv.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + sv.token}, body: JSON.stringify({zpl: etSkuLabelZpl('1.23456', 'Prueba de etiqueta Eurotruck')})});
+    const r = await fetch(sv.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + sv.token}, body: JSON.stringify({zpl: etLabelZpl(etSample())})});
     const j = await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error || ('error ' + r.status));
     playAddSound(); showToast('🖨 Prueba enviada a ' + (j.impresora || 'la Zebra'));
   }catch(e){ playErrorSound(); showToast('🖨 ' + e.message); }
 }
-setTimeout(etMountToggles, 1500); document.addEventListener('click', ()=>setTimeout(etMountToggles, 50), true);
+setTimeout(etMountToggles, 1500); setTimeout(()=>{ const d = document.getElementById('lowStockDetails'); try{ if(d && localStorage.getItem('et_lowstock_open') === '1') d.open = true; }catch(e){} }, 500); document.addEventListener('click', ()=>setTimeout(etMountToggles, 50), true);
 function buildZpl(ref){
   const p = PRODUCTS_BY_REF[ref];
   const inv = getInv(ref);

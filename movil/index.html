@@ -90,6 +90,8 @@ nav button.on span{transform:scale(1.1)}
 .etp{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px;font-size:14px;color:#cbd5e1}
 .et-switch{border:2px solid #475569;background:#1e293b;color:#cbd5e1;border-radius:999px;padding:11px 16px;font-weight:700;font-size:15px}
 .et-switch.on{background:#14532d;border-color:#22c55e;color:#dcfce7}
+.et-fields{display:flex;flex-wrap:wrap;gap:6px 12px;width:100%;color:#9fb0d0;font-size:13px}.et-f{display:flex;gap:6px;align-items:center;color:#e5edff}.et-f input{width:20px;height:20px}
+.et-prev-wrap{display:flex;flex-direction:column;gap:4px;color:#9fb0d0;font-size:12px}.et-prev{position:relative;background:#fff;color:#000;border-radius:6px;font-family:Arial,Helvetica,sans-serif}
 .et-copies-lbl{display:flex;gap:8px;align-items:center;font-weight:700}.et-copies{width:70px;padding:10px;border-radius:10px;border:1px solid var(--line);background:#060b18;color:#fff;font-size:18px;text-align:center}
 .pricebox{margin-top:14px;background:#0b1430;border:1px solid #1e3a8a;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .pricebox .pbt{font-weight:800}.pricebox label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#9fb0d0}
@@ -522,28 +524,66 @@ function etSetCopies(n){ n = Math.max(1, Math.min(50, parseInt(n, 10) || 1)); tr
 function etToggleHtml(){
   const on = etAutoPrintOn();
   return `<button type="button" class="et-switch ${on ? 'on' : ''}" onclick="etSetAutoPrint(!etAutoPrintOn())">🖨 Etiqueta: <b>${on ? 'ACTIVADA' : 'DESACTIVADA'}</b></button>
-    <label class="et-copies-lbl">Etiquetas por SKU <input type="number" class="et-copies" min="1" max="50" value="${etCopies()}" inputmode="numeric" onchange="etSetCopies(this.value)" oninput="etSetCopies(this.value)"></label>`;
+    <label class="et-copies-lbl">Etiquetas por SKU <input type="number" class="et-copies" min="1" max="50" value="${etCopies()}" inputmode="numeric" onchange="etSetCopies(this.value)" oninput="etSetCopies(this.value)"></label>` + etFieldsHtml();
 }
-function etSkuLabelZpl(sku, title, copias){
-  sku = etAscii(sku) || '?'; const n = sku.length;
-  const w = Math.max(34, Math.min(140, Math.floor(384 / (n * 0.66))));   // ancho de letra para que quepa en 2"
-  const h = 140;                                                         // alto de letra (grande)
-  const name = etAscii(title).slice(0, 34);
-  return ['^XA','^CI0','^PW406','^LL203','^LH0,0','^PR3',
-    `^FO8,12^FB390,1,0,C,0^A0N,${h},${w}^FD${sku}^FS`,
-    name ? `^FO8,166^FB390,1,0,C,0^A0N,26,22^FD${name}^FS` : '',
-    `^PQ${Math.max(1, Math.min(50, copias || 1))},0,1,Y`,'^XZ'].filter(Boolean).join('\n');
+function etFields(){ const d = {sku:true, name:true, brand:false, barcode:false, oe:false}; try{ return Object.assign(d, JSON.parse(localStorage.getItem('et_fields') || '{}')); }catch(e){ return d; } }
+function etSetField(k, on){ const f = etFields(); f[k] = !!on; try{ localStorage.setItem('et_fields', JSON.stringify(f)); }catch(e){} document.querySelectorAll('.et-f-' + k).forEach(c=>c.checked = !!on); etRefreshPreviews(); }
+// Acomoda lo elegido en la etiqueta de 2" x 1" (406 x 203 puntos a 203 dpi)
+function etLayout(d){
+  const f = etFields(); const W = 406, M = 6; let usable = 203 - 2 * M;
+  const sku = etAscii(d.sku) || '?';
+  const smalls = [];
+  if(f.oe && d.oe) smalls.push({k:'oe', t:'Ref: ' + etAscii(d.oe)});
+  if(f.brand && d.brand) smalls.push({k:'brand', t:etAscii(d.brand)});
+  if(f.name && d.title) smalls.push({k:'name', t:etAscii(d.title)});
+  const showSku = f.sku || (!smalls.length && !(f.barcode && d.barcode));
+  const bc = f.barcode && d.barcode ? etAscii(d.barcode) : '';
+  const sFont = showSku ? 22 : 30, sLine = sFont + 4;
+  const bcH = bc ? (showSku ? 38 : 70) : 0, bcBlock = bc ? bcH + 24 : 0;
+  let skuH = showSku ? Math.max(40, Math.min(140, usable - smalls.length * sLine - bcBlock - 2)) : 0;
+  // si no cabe, se achican las líneas chicas
+  let sl = sLine, sf = sFont;
+  while(showSku && usable - smalls.length * sl - bcBlock - 2 < 40 && sf > 16){ sf -= 2; sl = sf + 3; skuH = Math.max(40, Math.min(140, usable - smalls.length * sl - bcBlock - 2)); }
+  const items = []; let y = M;
+  if(showSku){ const w = Math.max(24, Math.min(Math.round(skuH * 0.9), Math.floor(390 / (sku.length * 0.62)))); items.push({type:'text', y, h:skuH, w, t:sku, big:true}); y += skuH + 2; }
+  smalls.forEach(s=>{ const maxCh = Math.floor(390 / (sf * 0.5)); items.push({type:'text', y, h:sf, w:Math.round(sf * 0.85), t:s.t.slice(0, maxCh), k:s.k}); y += sl; });
+  if(bc){ const mod = (11 * bc.length + 35) * 2 > 390 ? 1 : 2; const est = (11 * bc.length + 35) * mod; items.push({type:'barcode', y, h:bcH, t:bc, mod, x:Math.max(M, Math.round((W - est) / 2))}); }
+  return items;
+}
+function etLabelZpl(d, copias){
+  const L = ['^XA','^CI0','^PW406','^LL203','^LH0,0','^PR3'];
+  etLayout(d).forEach(it=>{
+    if(it.type === 'text') L.push(`^FO8,${it.y}^FB390,1,0,C,0^A0N,${it.h},${it.w}^FD${it.t}^FS`);
+    else L.push(`^FO${it.x},${it.y}^BY${it.mod},2.5,${it.h}^BCN,${it.h},Y,N,N^FD${it.t}^FS`);
+  });
+  L.push(`^PQ${Math.max(1, Math.min(50, copias || 1))},0,1,Y`, '^XZ');
+  return L.join('\n');
+}
+function etSkuLabelZpl(sku, title, copias){ return etLabelZpl({sku, title}, copias); }
+function etPreviewHtml(d){
+  const k = 0.62;  // escala de la vista previa
+  return `<div class="et-prev" style="width:${Math.round(406*k)}px;height:${Math.round(203*k)}px">` + etLayout(d).map(it=> it.type === 'text'
+    ? `<div style="position:absolute;left:0;right:0;top:${Math.round(it.y*k)}px;height:${Math.round(it.h*k)}px;font-size:${Math.round(it.h*k*0.86)}px;line-height:${Math.round(it.h*k)}px;font-weight:${it.big ? 800 : 600};text-align:center;white-space:nowrap;overflow:hidden;${it.big ? 'transform:scaleX(.9)' : ''}">${it.t.replace(/</g,'&lt;')}</div>`
+    : `<div style="position:absolute;left:${Math.round(it.x*k)}px;top:${Math.round(it.y*k)}px;height:${Math.round(it.h*k)}px;width:${Math.round((11*it.t.length+35)*it.mod*k)}px;background:repeating-linear-gradient(90deg,#000 0 2px,#fff 2px 3px,#000 3px 4px,#fff 4px 6px)"></div><div style="position:absolute;left:0;right:0;top:${Math.round((it.y+it.h+2)*k)}px;font-size:${Math.round(18*k)}px;text-align:center">${it.t}</div>`).join('') + `</div>`;
+}
+function etFieldsHtml(){
+  const f = etFields(); const c = (k, t)=>`<label class="et-f"><input type="checkbox" class="et-f-${k}" ${f[k] ? 'checked' : ''} onchange="etSetField('${k}', this.checked)"> ${t}</label>`;
+  return `<div class="et-fields">Incluir en la etiqueta: ${c('sku','SKU (grande)')}${c('name','Nombre')}${c('brand','Marca')}${c('barcode','Código de barras del sistema')}${c('oe','Ref. / artículo original')}</div><div class="et-prev-wrap"></div>`;
 }
 function etAutoPrintOn(){ try{ return localStorage.getItem('et_autoprint') !== 'off'; }catch(e){ return true; } }
 function etSetAutoPrint(on){ try{ localStorage.setItem('et_autoprint', on ? 'on' : 'off'); }catch(e){}
   document.querySelectorAll('.et-switch').forEach(b=>{ b.classList.toggle('on', !!on); b.innerHTML = '🖨 Etiqueta: <b>' + (on ? 'ACTIVADA' : 'DESACTIVADA') + '</b>'; });
   document.querySelectorAll('.et-autoprint').forEach(c=>c.checked = !!on); }
 
+function etDataFor(ref){ const p = BY_REF[ref] || {ref, refs:[]}; const v = view(); const row = v.inv[ref] || {}; const ic = (v.meta && v.meta.internalCodes) || {};
+  return {sku: p.ref, title: p.title || '', brand: p.brand || '', barcode: ic[ref] || '', oe: (p.refs || [])[0] || (row.oeRefs || [])[0] || ''}; }
+function etRefreshPreviews(){ const d = {sku:'1.24265', title:'Torica, bomba de aceite', brand:'Scania', barcode:'00123', oe:'Scania:1411851'};
+  document.querySelectorAll('.et-prev-wrap').forEach(w=>w.innerHTML = '<small>Vista previa (2" x 1"):</small>' + etPreviewHtml(d)); }
 async function etPrintSku(ref, auto){
   const p = BY_REF[ref]; if(!p) return;
   if(!cfg.token || !navigator.onLine){ if(!auto) toast('Para imprimir necesitas internet y sesión iniciada.', 'bad'); return; }
   try{
-    const r = await fetch(cfg.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({zpl: etSkuLabelZpl(p.ref, p.title, auto ? etCopies() : 1)})});
+    const r = await fetch(cfg.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({zpl: etLabelZpl(etDataFor(ref), auto ? etCopies() : 1)})});
     const j = await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error || ('error ' + r.status));
     if(!auto) toast('🖨 Etiqueta impresa: ' + p.ref, 'ok');
   }catch(e){ beep(false); toast('🖨 No se pudo imprimir: ' + e.message, 'bad'); }
@@ -1034,7 +1074,7 @@ $('closeInv').onclick = ()=>closeEntry('inv');
 $('closeRec').onclick = ()=>closeEntry('rec');
 $('lbtn').onclick = doLogin;
 $('gbtn').onclick = ()=> startGuest();
-document.querySelectorAll('.et-slot').forEach(d=>d.innerHTML = etToggleHtml());
+document.querySelectorAll('.et-slot').forEach(d=>d.innerHTML = etToggleHtml()); etRefreshPreviews();
 let _moreObs = ('IntersectionObserver' in window) ? new IntersectionObserver(es=>{ es.forEach(e=>{ if(e.isIntersecting && e.target.id === 'busMore' && currentTab === 'bus'){ busShown += 60; doSearch(true); } }); }, {rootMargin:'0px 0px 300px 0px'}) : null;
 new MutationObserver(()=>{ const b = document.getElementById('busMore'); if(b && _moreObs && !b._obs){ b._obs = 1; _moreObs.observe(b); } }).observe(document.getElementById('listBus'), {childList:true}); $('lp').addEventListener('keydown', e=>{ if(e.key === 'Enter') doLogin(); });
 document.querySelectorAll('button.cam').forEach(b=> b.onclick = ()=>{ if(camOn) stopCam(); else startCam(); });
