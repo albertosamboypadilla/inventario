@@ -2978,6 +2978,7 @@ async function makeServerDbApi(cfg){
 function restoreCustomProducts(){
   for(const ref of Object.keys(inventoryState)){
     const row = inventoryState[ref];
+    if(row && row.edit && PRODUCTS_BY_REF[ref]) applyArticleEdit(PRODUCTS_BY_REF[ref], row.edit);
     if(row && Array.isArray(row.oeRefs) && PRODUCTS_BY_REF[ref]){ const pp = PRODUCTS_BY_REF[ref]; if(!pp._baseRefs) pp._baseRefs = (pp.refsList||[]).filter(r=>!row.oeRefs.includes(r)); pp.refsList = Array.from(new Set(pp._baseRefs.concat(row.oeRefs))); }
     if(!row || !row.product) continue;
     const pr = row.product;
@@ -2988,6 +2989,7 @@ function restoreCustomProducts(){
     } else if(p._custom){
       Object.assign(p, {title:pr.title||ref, brand:pr.brand||p.brand, cat:pr.cat||p.cat, gtin:pr.gtin||'', img:pr.img||'', applications:pr.applications||''});
     }
+    if(row.edit) applyArticleEdit(p, row.edit);
   }
   // artículos propios que se eliminaron en otra PC
   for(let i = products.length - 1; i >= 0; i--){
@@ -5408,11 +5410,34 @@ function renderArticleDetail(){
           <div class="art-stat-box"><span>Ubicación actual</span><b style="font-size:.86rem;">${formatLocationLabel(inv.location)}${extraLocs(inv).map(l=>`<br><span class="extra-loc" title="Quitar esta ubicación" onclick="removeExtraLocation('${ref}','${l}')">＋ ${formatLocationLabel(l)} ✕</span>`).join('')}</b></div>
         </div>
         <div class="art-actions-row">
+          ${currentUser && currentUser.role==='admin' ? `<button class="mini-btn mini-btn--wa" onclick="const s=document.getElementById('artEditSection'); s.scrollIntoView({behavior:'smooth',block:'start'}); setTimeout(()=>document.getElementById('artEdTitle').focus(),300)">✏️ Editar artículo</button>` : ''}
           <button class="mini-btn" onclick="document.getElementById('artAddGtinInput').focus()">Agregar otro GTIN</button>
           <button class="mini-btn mini-btn--del" onclick="deleteArticleFromDetail('${ref}')">Eliminar artículo completo</button>
         </div>
       </div>
     </div>
+
+    ${currentUser && currentUser.role==='admin' ? `<div class="art-section" id="artEditSection">
+      <div class="art-section-kicker">✏️ Editar artículo</div>
+      <p class="art-section-sub">Cambia los datos y presiona Guardar cambios. Se actualiza en todas las PC y celulares.</p>
+      <div class="art-price-row" style="margin-bottom:10px;">
+        <label style="flex:2;min-width:220px;">Nombre del artículo<input type="text" id="artEdTitle" value="${String(p.title||'').replace(/"/g,'&quot;')}"></label>
+        <label>Marca<input type="text" id="artEdBrand" value="${String(p.brand||'').replace(/"/g,'&quot;')}"></label>
+      </div>
+      <div class="art-price-row" style="margin-bottom:10px;">
+        <label>Categoría<input type="text" id="artEdCat" value="${String(p.cat||'').replace(/"/g,'&quot;')}"></label>
+        <label style="flex:2;min-width:220px;">Aplicaciones / vehículos<input type="text" id="artEdApps" value="${String(p.applications||'').replace(/"/g,'&quot;')}"></label>
+      </div>
+      <div class="art-price-row" style="margin-bottom:10px;">
+        <label>GTIN principal<input type="text" id="artEdGtin" inputmode="numeric" value="${principalGtin}" placeholder="8 a 14 dígitos"></label>
+        <label style="flex:2;min-width:220px;">Foto — pegar URL<input type="text" id="artEdImgUrl" placeholder="https://... (déjalo vacío para no cambiarla)"></label>
+      </div>
+      <div class="art-price-row" style="margin-bottom:10px;align-items:center;">
+        <label>Foto — subir archivo<input type="file" id="artEdImgFile" accept="image/*" style="padding:6px 0"></label>
+        <div id="artEdImgPrev"></div>
+      </div>
+      <div class="art-price-row"><button class="mini-btn mini-btn--wa" style="padding:10px 16px;font-size:.85rem" onclick="saveArticleEdits('${ref}')">💾 Guardar cambios</button></div>
+    </div>` : ''}
 
     <div class="art-section">
       <div class="art-section-kicker">Códigos de barras</div>
@@ -5516,6 +5541,36 @@ function saveArticlePrices(ref){
   renderProducts();
   renderCatalogCards();
   showToast('Precio actualizado.');
+}
+/* ---------- editar artículo (propios y del catálogo) ---------- */
+function shrinkImage(file, max){
+  return new Promise((resolve, reject)=>{ const fr = new FileReader(); fr.onerror = reject; fr.onload = ()=>{ const im = new Image(); im.onerror = ()=>resolve(fr.result); im.onload = ()=>{
+    const k = Math.min(1, (max||500) / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = Math.round(im.width*k); c.height = Math.round(im.height*k);
+    const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0,0,c.width,c.height); g.drawImage(im, 0, 0, c.width, c.height); resolve(c.toDataURL('image/jpeg', .82)); }; im.src = fr.result; }; fr.readAsDataURL(file); });
+}
+function applyArticleEdit(p, ed){
+  if(!p || !ed) return;
+  ['title','brand','cat','applications','img','gtin'].forEach(k=>{ if(ed[k] !== undefined && ed[k] !== null) p[k] = ed[k]; });
+}
+async function saveArticleEdits(ref){
+  const p = PRODUCTS_BY_REF[ref]; if(!p) return; const inv = getInv(ref);
+  const val = id => (document.getElementById(id).value||'').trim();
+  const title = val('artEdTitle');
+  if(!title){ markFieldError(document.getElementById('artEdTitle'), 'El nombre no puede quedar vacío.'); return; }
+  const gtin = val('artEdGtin');
+  if(gtin && !/^[0-9]{8,14}$/.test(gtin)){ markFieldError(document.getElementById('artEdGtin'), 'GTIN no válido: solo números, de 8 a 14 dígitos.'); return; }
+  if(gtin){ const owner = findProductByCode(gtin); if(owner && owner.ref !== ref){ markFieldError(document.getElementById('artEdGtin'), `Ese GTIN ya pertenece al SKU ${owner.ref} (${owner.title}).`); return; } }
+  const ed = Object.assign({}, inv.edit || {}, {title, brand: val('artEdBrand'), cat: val('artEdCat'), applications: val('artEdApps'), gtin, editado: new Date().toISOString(), por: currentUser ? currentUser.username : ''});
+  const f = document.getElementById('artEdImgFile').files[0]; const url = val('artEdImgUrl');
+  if(f){ try{ ed.img = await shrinkImage(f, 500); }catch(e){} } else if(url){ ed.img = url; }
+  // el GTIN principal anterior pasa a alternativo para que siga funcionando al escanear
+  const prevG = p.gtin || inv.gtin || '';
+  if(prevG && gtin && prevG !== gtin){ inv.altCodes = Array.from(new Set((inv.altCodes||[]).concat([prevG]))).filter(c=>c !== gtin); }
+  inv.gtin = gtin; inv.edit = ed;
+  if(inv.product){ Object.assign(inv.product, {title: ed.title, brand: ed.brand, cat: ed.cat, applications: ed.applications, gtin}); if(ed.img) inv.product.img = ed.img; }
+  applyArticleEdit(p, ed);
+  _codeIndex = null; saveInventory(); renderArticleDetail(); renderProducts(); if(typeof renderCatalogCards === 'function') renderCatalogCards();
+  playAddSound(); showToast('✔ Artículo actualizado: ' + title);
 }
 function addOeRefFromInput(ref){
   const el = document.getElementById('artAddOeInput'); if(!el) return;

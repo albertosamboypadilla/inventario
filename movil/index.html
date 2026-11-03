@@ -289,6 +289,8 @@ function rebuildCodes(){
   // artículos creados en la PC (la ficha viaja en el registro de inventario)
   if(isGuest()) Object.entries(PUB.nuevos || {}).forEach(([ref,pr])=>{ if(!BY_REF[ref]){ BY_REF[ref] = {ref, title:pr.title||ref, brand:pr.brand||'', cat:pr.cat||'', gtin:pr.gtin||'', refs:[], oe:'', img:pr.img||'', custom:true}; PRODUCTS.push(BY_REF[ref]); } });
   Object.entries(v.inv).forEach(([ref,row])=>{ if(row && row.product && !BY_REF[ref]){ const pr = row.product; BY_REF[ref] = {ref, title:pr.title||ref, brand:pr.brand||'', cat:pr.cat||'', gtin:pr.gtin||'', refs:[...new Set((pr.refs||[]).concat(row.oeRefs||[]))], oe:'', img:pr.img||'', custom:true}; PRODUCTS.push(BY_REF[ref]); } });
+  // cambios hechos con "Editar artículo" en la PC (nombre, marca, foto, GTIN…)
+  Object.entries(v.inv).forEach(([ref,row])=>{ const p = BY_REF[ref]; if(row && row.edit && p){ const ed = row.edit; ['title','brand','cat','img','gtin'].forEach(k=>{ if(ed[k] !== undefined && ed[k] !== null && (k !== 'img' || ed[k])) p[k] = ed[k]; }); } });
   for(const p of PRODUCTS){ if(del.has(p.ref)) continue; add(p.ref, p.ref); }
   const ic = (v.meta && v.meta.internalCodes) || {};
   for(const p of PRODUCTS){
