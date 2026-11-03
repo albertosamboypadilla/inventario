@@ -5210,7 +5210,9 @@ function submitNewArticle(){
   const ref = (refEl.value||'').trim();
   const title = (titleEl.value||'').trim();
   if(!ref || !title){ playErrorSound(); showToast('La referencia/SKU y el nombre son obligatorios.'); return; }
-  if(PRODUCTS_BY_REF[ref]){ playErrorSound(); showToast('Ya existe un artículo con esa referencia.'); return; }
+  // si la referencia existe pero estaba eliminada, se vuelve a crear (se quita de eliminados)
+  const revive = !!PRODUCTS_BY_REF[ref] && isDeleted(ref);
+  if(PRODUCTS_BY_REF[ref] && !revive){ playErrorSound(); showToast('Ya existe un artículo con esa referencia.'); return; }
   const brand = (document.getElementById('newArtBrand').value||'').trim() || 'DT Spare Parts';
   const cat = (document.getElementById('newArtCat').value||'').trim() || 'Repuesto';
   const applications = (document.getElementById('newArtApps').value||'').trim();
@@ -5228,6 +5230,8 @@ function submitNewArticle(){
   const costVal = costEl ? costEl.value : '';
   const priceVal = document.getElementById('newArtPrice').value;
 
+  deletedRefs = deletedRefs.filter(r=>r !== ref);
+  if(revive){ const i = products.findIndex(x=>x.ref===ref); if(i>=0) products.splice(i,1); delete PRODUCTS_BY_REF[ref]; }
   const newP = {ref, sku:ref, title, brand, cat, pack:'1 PCS', gtin, url:'', refsList:oeRefs.slice(), _baseRefs:[], marca:MARCA_FIJA, img:newArticleImageData||'', applications, sourceUrl: PORTAL_URL, _custom:true};
   products.push(newP);
   PRODUCTS_BY_REF[ref] = newP;
