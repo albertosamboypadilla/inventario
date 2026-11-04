@@ -3301,12 +3301,30 @@ function stockPillHtml(stock){
   return `<span class="stock-pill in-stock">${stock} ${tr('disp.','avail.')}</span>`;
 }
 
+// Orden de búsqueda: primero los SKU que coinciden (exacto → empieza → contiene; los más cortos primero), después el resto
+const normSku = x => String(x||'').toLowerCase().replace(/[\s.\-\/]/g,'');
+function searchRank(p, q){
+  const r = String(p.ref||'').toLowerCase(), nr = normSku(r), nq = normSku(q);
+  if(r === q || (nq && nr === nq)) return 0;
+  if(r.startsWith(q) || (nq && nr.startsWith(nq))) return 1;
+  if(r.includes(q) || (nq.length >= 2 && nr.includes(nq))) return 2;
+  const inv = inventoryState[p.ref] || {};
+  if((p.gtin||'').toLowerCase() === q || (inv.gtin||'').toLowerCase() === q || (internalCodes[p.ref]||'').toLowerCase() === q || codeListHit(p.refsList, q, true)) return 3;
+  if(String(p.title||'').toLowerCase().startsWith(q)) return 4;
+  return 5;
+}
+function sortBySearch(list, q){
+  if(!q) return list;
+  const rk = new Map(list.map(p=>[p.ref, searchRank(p, q)]));
+  return list.slice().sort((a, b)=> rk.get(a.ref) - rk.get(b.ref) || (rk.get(a.ref) <= 2 ? normSku(a.ref).length - normSku(b.ref).length : 0) || String(a.ref).localeCompare(String(b.ref), 'es', {numeric:true}));
+}
 function getFilteredProducts(){
   const q = searchTerm.toLowerCase();
-  return visibleProducts().filter(p=>{
+  const res = visibleProducts().filter(p=>{
     const matchesBrand = activeBrand==='Todas' || p.brand===activeBrand;
     if(!matchesBrand) return false;
     if(!q) return true;
+    if(normSku(q).length >= 2 && normSku(p.ref).includes(normSku(q))) return true;
     const inv = getInv(p.ref);
     if(p.title.toLowerCase().includes(q) || p.ref.toLowerCase().includes(q) || p.cat.toLowerCase().includes(q) || (p.gtin||'').toLowerCase().includes(q) || (inv.gtin||'').toLowerCase().includes(q)) return true;
     if(inv.altCodes && inv.altCodes.some(c=>String(c).toLowerCase().includes(q))) return true;
@@ -3315,7 +3333,9 @@ function getFilteredProducts(){
     if(inv.altCodes && normCode(q).length >= 3 && inv.altCodes.some(c=>normCode(c).includes(normCode(q)))) return true;
     return false;
   });
+  return sortBySearch(res, q);
 }
+
 
 function productCardHtml(p){
   const inv = getInv(p.ref);
@@ -5031,8 +5051,9 @@ function renderCatalogCards(){
   const countLine = document.getElementById('catalogCountLine');
   if(countLine) countLine.textContent = `${all.length.toLocaleString('es-DO')} artículos disponibles · ${withGtinCount.toLocaleString('es-DO')} con GTIN`;
 
-  const fullList = all.filter(p=>{
+  const fullList = sortBySearch(all.filter(p=>{
     if(!q) return true;
+    if(normSku(q).length >= 2 && normSku(p.ref).includes(normSku(q))) return true;
     const inv = getInv(p.ref);
     if(p.title.toLowerCase().includes(q) || p.ref.toLowerCase().includes(q) ||
       (inv.gtin||'').toLowerCase().includes(q) || (p.gtin||'').toLowerCase().includes(q) ||
@@ -5041,7 +5062,7 @@ function renderCatalogCards(){
     if(internalCodes[p.ref] && internalCodes[p.ref].toLowerCase().includes(q)) return true;
     if(codeListHit(p.refsList, q, false)) return true;
     return false;
-  });
+  }), q);
 
   const totalPages = Math.max(1, Math.ceil(fullList.length / INV_PAGE_SIZE));
   if(invPage >= totalPages) invPage = totalPages-1;

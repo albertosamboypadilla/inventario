@@ -888,6 +888,7 @@ function setQty(kind, ref, n){
   else queue({t:'recvSet', ref, n});
 }
 let busShown = 40;
+const skuN = x => String(x||'').toLowerCase().replace(/[\s.\-\/]/g,'');
 function doSearch(more){
   if(!more) busShown = 40;
   const q = $('inBus').value.trim().toLowerCase(); const out = $('listBus');
@@ -896,13 +897,16 @@ function doSearch(more){
   let res = [];
   for(const p of PRODUCTS){
     if(del.has(p.ref)) continue;
+    if(q && skuN(q).length >= 2 && skuN(p.ref).includes(skuN(q))){ res.push(p); continue; }
     if(words.length){ const rw = v.inv[p.ref]; const hay = (p.title + ' ' + p.ref + ' ' + p.brand + ' ' + p.cat + ' ' + p.gtin + ' ' + p.oe + ' ' + p.refs.join(' ') + ' ' + (ic[p.ref]||'') + (rw ? ' ' + (rw.gtin||'') + ' ' + (rw.altCodes||[]).join(' ') + ' ' + (rw.oeRefs||[]).join(' ') : '')).toLowerCase();
       if(!words.every(w=>hay.includes(w))){ const nq = normCode(q); if(!(nq.length >= 5 && normCode(hay).includes(nq))) continue; } }
     res.push(p);
   }
   // los que están en stock primero (de más a menos); el código exacto escaneado, arriba de todo
   const st = new Map(res.map(p=>[p.ref, stockOf(p.ref)]));
-  res.sort((a, b)=> (b === exact) - (a === exact) || (st.get(b.ref) > 0) - (st.get(a.ref) > 0) || st.get(b.ref) - st.get(a.ref) || a.title.localeCompare(b.title, 'es'));
+  // con búsqueda: primero los SKU que coinciden (exacto → empieza → contiene, los más cortos primero); luego en stock
+  const rk = new Map(res.map(p=>{ const r = p.ref.toLowerCase(), nr = skuN(r), nq = skuN(q); return [p.ref, !q ? 3 : (r === q || nr === nq) ? 0 : (r.startsWith(q) || nr.startsWith(nq)) ? 1 : (r.includes(q) || (nq.length >= 2 && nr.includes(nq))) ? 2 : 3]; }));
+  res.sort((a, b)=> (b === exact) - (a === exact) || rk.get(a.ref) - rk.get(b.ref) || (rk.get(a.ref) <= 2 ? skuN(a.ref).length - skuN(b.ref).length : 0) || (st.get(b.ref) > 0) - (st.get(a.ref) > 0) || st.get(b.ref) - st.get(a.ref) || a.title.localeCompare(b.title, 'es'));
   const enStock = res.filter(p=>st.get(p.ref) > 0).length;
   const head = `<div class="mut" style="margin:2px 4px 8px">${res.length.toLocaleString('es-DO')} artículo(s)${q ? ` para “${esc(q)}”` : ''} · <b style="color:#86efac">${enStock.toLocaleString('es-DO')} en stock</b> (primero)</div>`;
   const shown = res.slice(0, busShown);
