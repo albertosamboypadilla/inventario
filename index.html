@@ -3309,9 +3309,10 @@ function searchRank(p, q){
   if(r.startsWith(q) || (nq && nr.startsWith(nq))) return 1;
   if(r.includes(q) || (nq.length >= 2 && nr.includes(nq))) return 2;
   const inv = inventoryState[p.ref] || {};
-  if((p.gtin||'').toLowerCase() === q || (inv.gtin||'').toLowerCase() === q || (internalCodes[p.ref]||'').toLowerCase() === q || codeListHit(p.refsList, q, true)) return 3;
-  if(String(p.title||'').toLowerCase().startsWith(q)) return 4;
-  return 5;
+  if((p.gtin||'').toLowerCase() === q || (inv.gtin||'').toLowerCase() === q || (internalCodes[p.ref]||'').toLowerCase() === q || (inv.altCodes||[]).some(c=>String(c).toLowerCase() === q)) return 3;
+  if(codeListHit(p.refsList, q, true)) return 4;
+  if(String(p.title||'').toLowerCase().startsWith(q)) return 5;
+  return 6;
 }
 function sortBySearch(list, q){
   if(!q) return list;
@@ -4493,19 +4494,20 @@ function removeExtraLocation(ref, loc){
 }
 
 /* ---------- Escaneo / registro ---------- */
+// Escanear: el número se busca POR PRIORIDAD para no confundir artículos:
+// 1) SKU  2) GTIN / GTIN extra  3) código Zebra  4) referencia original (solo si la tiene UN solo artículo)
+let lastCodeAmbiguous = null;
 function findProductByCode(code){
-  const lc = code.trim().toLowerCase();
+  const lc = String(code||'').trim().toLowerCase(); lastCodeAmbiguous = null;
   if(!lc) return null;
-  return visibleProducts().find(p => {
-    if(p.ref.toLowerCase()===lc) return true;
-    const inv = getInv(p.ref);
-    if((inv.gtin||'').toLowerCase()===lc) return true;
-    if((p.gtin||'').toLowerCase()===lc) return true;
-    if(internalCodes[p.ref] && internalCodes[p.ref].toLowerCase()===lc) return true;
-    if(inv.altCodes && inv.altCodes.some(c=>String(c).toLowerCase()===lc)) return true;
-    if(codeListHit(p.refsList, lc, true)) return true;
-    return false;
-  });
+  const vis = visibleProducts();
+  let p = vis.find(p => p.ref.toLowerCase() === lc); if(p) return p;
+  p = vis.find(p => { const inv = getInv(p.ref); return (inv.gtin||'').toLowerCase() === lc || (p.gtin||'').toLowerCase() === lc || (Array.isArray(inv.altCodes) && inv.altCodes.some(c => String(c).toLowerCase() === lc)); }); if(p) return p;
+  p = vis.find(p => internalCodes[p.ref] && internalCodes[p.ref].toLowerCase() === lc); if(p) return p;
+  const oe = vis.filter(p => codeListHit(p.refsList, lc, true));
+  if(oe.length === 1) return oe[0];
+  if(oe.length > 1) lastCodeAmbiguous = oe;
+  return null;
 }
 // Escanear en Inventario YA NO suma el stock al toque — solo se va contando en la lista de
 // "esta área" (como Recepción de mercancía). El stock real recién se suma todo junto cuando
@@ -4514,7 +4516,7 @@ function registerScan(code, qty, decided){
   qty = Number(qty)||1;
   if(pendingLocAlert && !decided){ playErrorSound(); showToast('Primero elige qué hacer con el artículo de la alerta de ubicación.'); return; }
   const p = findProductByCode(code);
-  if(!p){ playErrorSound(); showToast('Código no encontrado en el catálogo: '+code); return; }
+  if(!p){ playErrorSound(); showToast(lastCodeAmbiguous ? `El número ${code} es referencia original de ${lastCodeAmbiguous.length} artículos (${lastCodeAmbiguous.slice(0,4).map(x=>x.ref).join(', ')}${lastCodeAmbiguous.length>4?'…':''}). Escanea el SKU o el GTIN.` : 'Código no encontrado en el catálogo: '+code); return; }
   const inv = getInv(p.ref);
   const area = activeArea();
   const here = area.tramo + '/' + area.estante;
@@ -4688,7 +4690,7 @@ function submitReceivingScan(code){
   const p = findProductByCode(code);
   if(!p){
     playErrorSound();
-    showToast(`Código no encontrado: "${code}" — agrégalo primero en Inventario.`);
+    showToast(lastCodeAmbiguous ? `El número ${code} es referencia original de ${lastCodeAmbiguous.length} artículos (${lastCodeAmbiguous.slice(0,4).map(x=>x.ref).join(', ')}). Escanea el SKU o el GTIN.` : `Código no encontrado: "${code}" — agrégalo primero en Inventario.`);
     focusReceivingInput();
     return;
   }
@@ -5292,7 +5294,7 @@ function setMultiCodes(listId, kind, values){
 // compara códigos sin importar espacios, puntos ni guiones ("205 142 35" = "20514235")
 const normCode = c => String(c||'').toLowerCase().replace(/[\s.\-\/]/g,'');
 // "Volvo 205 142 35" -> "20514235" (quita la marca de adelante)
-const stripBrand = c => String(c||'').toLowerCase().trim().replace(/^[a-zà-ÿ&'.\s-]+?\s+(?=[0-9a-z]*\d)/,'');
+const stripBrand = c => { const t = String(c||'').toLowerCase().trim(); const i = t.indexOf(':'); if(i > 0 && /^[a-zà-ÿ&'.\s-]+$/.test(t.slice(0, i))) return t.slice(i + 1).trim(); return t.replace(/^[a-zà-ÿ&'.\s-]+?\s+(?=[0-9a-z]*\d)/,''); };
 function codeListHit(list, q, exact){
   if(!Array.isArray(list) || !list.length) return false;
   const nq = normCode(q);

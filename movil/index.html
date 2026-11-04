@@ -290,9 +290,12 @@ async function loadCatalog(){
 }
 function deletedSet(){ if(isGuest()) return new Set(PUB.eliminados || []); const m = view().meta; return new Set((m && m.deletedRefs) || []); }
 function rebuildCodes(){
-  CODE_MAP = new Map(); NORM_MAP = new Map();
-  const add = (c, ref)=>{ c = String(c||'').trim().toLowerCase(); if(!c) return; if(!CODE_MAP.has(c)) CODE_MAP.set(c, ref); const n = normCode(c); if(n.length >= 5 && !NORM_MAP.has(n)) NORM_MAP.set(n, ref);
-    const sb = c.replace(/^[a-zà-ÿ&'.\s-]+?\s+(?=[0-9a-z]*\d)/,''); if(sb !== c){ if(!CODE_MAP.has(sb)) CODE_MAP.set(sb, ref); const ns = normCode(sb); if(ns.length >= 5 && !NORM_MAP.has(ns)) NORM_MAP.set(ns, ref); } };
+  // Prioridad al escanear: 1) SKU 2) GTIN/GTIN extra 3) código Zebra 4) referencia original (solo si es de UN artículo)
+  CODE_MAP = new Map(); NORM_MAP = new Map(); OE_MAP = new Map();
+  const add = (c, ref)=>{ c = String(c||'').trim().toLowerCase(); if(!c) return; if(!CODE_MAP.has(c)) CODE_MAP.set(c, ref); };
+  const addOe = (c, ref)=>{ c = String(c||'').trim().toLowerCase(); if(!c) return;
+    const i = c.indexOf(':'); const sb = (i > 0 && /^[a-zà-ÿ&'.\s-]+$/.test(c.slice(0, i))) ? c.slice(i + 1).trim() : c.replace(/^[a-zà-ÿ&'.\s-]+?\s+(?=[0-9a-z]*\d)/,'');
+    [c, sb, normCode(c), normCode(sb)].forEach(k=>{ if(k && k.length >= 3){ let set = OE_MAP.get(k); if(!set){ set = new Set(); OE_MAP.set(k, set); } set.add(ref); } }); };
   const v = view(); const del = deletedSet();
   // artículos creados en la PC (la ficha viaja en el registro de inventario)
   if(isGuest()) Object.entries(PUB.nuevos || {}).forEach(([ref,pr])=>{ if(!BY_REF[ref]){ BY_REF[ref] = {ref, title:pr.title||ref, brand:pr.brand||'', cat:pr.cat||'', gtin:pr.gtin||'', refs:[], oe:'', img:pr.img||'', custom:true}; PRODUCTS.push(BY_REF[ref]); } });
@@ -301,18 +304,25 @@ function rebuildCodes(){
   Object.entries(v.inv).forEach(([ref,row])=>{ const p = BY_REF[ref]; if(row && row.edit && p){ const ed = row.edit; ['title','brand','cat','img','gtin'].forEach(k=>{ if(ed[k] !== undefined && ed[k] !== null && (k !== 'img' || ed[k])) p[k] = ed[k]; }); } });
   for(const p of PRODUCTS){ if(del.has(p.ref)) continue; add(p.ref, p.ref); }
   const ic = (v.meta && v.meta.internalCodes) || {};
-  for(const p of PRODUCTS){
-    if(del.has(p.ref)) continue;
-    add(ic[p.ref], p.ref); add(p.gtin, p.ref);
-    const row = v.inv[p.ref]; if(row){ add(row.gtin, p.ref); (row.altCodes||[]).forEach(c=>add(c, p.ref)); (row.oeRefs||[]).forEach(c=>add(c, p.ref)); }
-    (GTIN_ALT[p.ref]||[]).forEach(c=>add(c, p.ref));
-    p.refs.forEach(c=>add(c, p.ref));
-  }
-  CODES_SORTED = Array.from(CODE_MAP.keys()).sort();
+  for(const p of PRODUCTS){ if(del.has(p.ref)) continue; const row = v.inv[p.ref];   // 2) GTIN
+    add(p.gtin, p.ref); if(row){ add(row.gtin, p.ref); (row.altCodes||[]).forEach(c=>add(c, p.ref)); } (GTIN_ALT[p.ref]||[]).forEach(c=>add(c, p.ref)); }
+  for(const p of PRODUCTS){ if(del.has(p.ref)) continue; add(ic[p.ref], p.ref); }   // 3) Zebra
+  for(const p of PRODUCTS){ if(del.has(p.ref)) continue; const row = v.inv[p.ref];   // 4) referencia original
+    p.refs.forEach(c=>addOe(c, p.ref)); if(row) (row.oeRefs||[]).forEach(c=>addOe(c, p.ref)); }
+  CODE_MAP.forEach((ref, c)=>{ const n = normCode(c); if(n.length >= 5 && !NORM_MAP.has(n)) NORM_MAP.set(n, ref); });
+  CODES_SORTED = Array.from(new Set([...CODE_MAP.keys(), ...OE_MAP.keys()])).sort();
 }
-let NORM_MAP = new Map();
+let NORM_MAP = new Map(), OE_MAP = new Map(), lastAmbiguous = null;
 const normCode = c => String(c||'').toLowerCase().replace(/[\s.\-\/]/g,'');
-function findByCode(code){ const lc = String(code||'').trim().toLowerCase(); const ref = CODE_MAP.get(lc) || (normCode(lc).length >= 5 ? NORM_MAP.get(normCode(lc)) : null); return ref ? BY_REF[ref] : null; }
+function findByCode(code){
+  const lc = String(code||'').trim().toLowerCase(); lastAmbiguous = null;
+  const ref = CODE_MAP.get(lc) || (normCode(lc).length >= 5 ? NORM_MAP.get(normCode(lc)) : null);
+  if(ref) return BY_REF[ref];
+  const set = OE_MAP.get(lc) || OE_MAP.get(normCode(lc));
+  if(set && set.size === 1) return BY_REF[[...set][0]];
+  if(set && set.size > 1) lastAmbiguous = [...set];
+  return null;
+}
 function hasLongerCode(code){
   const lc = code.trim().toLowerCase(); let lo = 0, hi = CODES_SORTED.length;
   while(lo < hi){ const m = (lo+hi) >> 1; if(CODES_SORTED[m] < lc) lo = m + 1; else hi = m; }
@@ -478,7 +488,7 @@ function handleCode(code, source){
   code = String(code||'').trim(); if(!code) return;
   const p = findByCode(code);
   if(currentTab === 'bus'){ $('inBus').value = code; doSearch(); if(p) openDetail(p.ref); return; }
-  if(!p){ beep(false); toast('Código no encontrado: ' + code, 'bad'); return; }
+  if(!p){ beep(false); toast(lastAmbiguous ? `${code} es referencia original de ${lastAmbiguous.length} artículos (${lastAmbiguous.slice(0,3).join(', ')}…). Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); return; }
   if(!isAdmin()){ beep(false); toast('Solo un administrador puede contar o recibir. Usa Buscar.', 'bad'); return; }
   const now = new Date();
   if(currentTab === 'inv'){
