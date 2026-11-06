@@ -93,6 +93,7 @@ nav button.on span{transform:scale(1.1)}
 .et-fields{display:flex;flex-wrap:wrap;gap:6px 12px;width:100%;color:#9fb0d0;font-size:13px}.et-f{display:flex;gap:6px;align-items:center;color:#e5edff}.et-f input{width:20px;height:20px}
 .et-prev-wrap{display:flex;flex-direction:column;gap:4px;color:#9fb0d0;font-size:12px}.et-prev{position:relative;background:#fff;color:#000;border-radius:6px;font-family:Arial,Helvetica,sans-serif}
 .et-copies-lbl{display:flex;gap:8px;align-items:center;font-weight:700}.et-copies{width:70px;padding:10px;border-radius:10px;border:1px solid var(--line);background:#060b18;color:#fff;font-size:18px;text-align:center}
+.pricebox textarea{font-size:16px;padding:10px;border-radius:10px;border:1px solid var(--line);background:#060b18;color:#fff;font-family:inherit}
 .pricebox{margin-top:14px;background:#0b1430;border:1px solid #1e3a8a;border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:10px}
 .pricebox .pbt{font-weight:800}.pricebox label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:#9fb0d0}
 .pricebox input{font-size:20px;padding:12px;border-radius:10px;border:1px solid var(--line);background:#060b18;color:#fff}
@@ -232,6 +233,9 @@ const DEFAULT_SERVER = 'https://samboy.tail0ccce7.ts.net';
 const APP = 'eurotruck';
 const LS = { cfg:'etm_cfg', ops:'etm_ops', area:'etm_area', cache:'etm_cache' };
 const MAIN_ADMINS = ['albertosamboy89@gmail.com','alberto','admin2'];
+// Solo los usuarios principales (Alberto) pueden editar artículos desde el celular
+const PRINCIPALES = ['alberto','albertosamboy89@gmail.com'];
+const isPrincipal = ()=> !!(cfg && cfg.token && !cfg.guest && (cfg.superAdmin || PRINCIPALES.includes(cfg.usuario)));
 const $ = id => document.getElementById(id);
 const clone = o => o == null ? o : JSON.parse(JSON.stringify(o));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -400,6 +404,12 @@ const OPS = {
       if(!d.items.length) d.startedAt = null; return d; } }
 };
 // poner costo y/o precio de un artículo
+OPS.setEdit = { inv(r, o){ r = r || defaultRow(o.ref); r.edit = Object.assign({}, r.edit || {}, o.edit, {editado: new Date().toISOString(), por: cfg.usuario}); if(r.product && o.edit.title) r.product.title = o.edit.title; return r; } };
+OPS.setOe = { inv(r, o){ r = r || defaultRow(o.ref); r.oeRefs = o.oeRefs.slice(); if(r.product) r.product.refs = o.oeRefs.slice(); return r; } };
+OPS.setStock = {
+  meta(m, o){ m = m || {}; m.inventoryEntriesLog = [{id: o.id, date: o.at, area: 'Ajuste de stock', user: o.by, origen: 'celular', items: [{ref: o.ref, title: o.title, qty: o.diff, location: o.loc || ''}]}].concat((m.inventoryEntriesLog || []).filter(e=>e.id !== o.id)).slice(0, 500); return m; },
+  inv(r, o){ r = r || defaultRow(o.ref); r.stock = o.stock; return r; }
+};
 OPS.setLoc = { inv(r, o){ r = r || defaultRow(o.ref); r.location = o.location; return r; } };
 OPS.setPrice = { inv(r, o){ r = r || defaultRow(o.ref); if('cost' in o) r.cost = o.cost; if('price' in o) r.price = o.price; return r; } };
 // Cerrar entrada de un área (igual que en la PC): suma al stock, vacía lo contado y deja historial
@@ -487,7 +497,7 @@ function areaSel(){ const v = $('areaSel').value; if(!v) return null; const [tra
 function handleCode(code, source){
   code = String(code||'').trim(); if(!code) return;
   const p = findByCode(code);
-  if(currentTab === 'bus'){ $('inBus').value = code; doSearch(); if(p) openDetail(p.ref); return; }
+  if(currentTab === 'bus'){ $('inBus').value = code; doSearch(); if(p){ beep(true); openDetail(p.ref); if(isPrincipal()) setTimeout(()=>{ const q = $('edStock'); if(q){ q.focus(); q.select(); } }, 250); } else { beep(false); toast(lastAmbiguous ? `${code} es referencia original de varios artículos. Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); } return; }
   if(!p){ beep(false); toast(lastAmbiguous ? `${code} es referencia original de ${lastAmbiguous.length} artículos (${lastAmbiguous.slice(0,3).join(', ')}…). Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); return; }
   if(!isAdmin()){ beep(false); toast('Solo un administrador puede contar o recibir. Usa Buscar.', 'bad'); return; }
   const now = new Date();
@@ -889,7 +899,7 @@ function itemHtml(ref, qty, kind){
   const p = BY_REF[ref] || {ref, title:ref, brand:''}; const row = view().inv[ref];
   const loc = row && row.location ? ` · 📍 ${esc(locsLabel(row))}` : '';
   const pr = isAdmin() && row && row.price !== '' && row.price != null ? ` · 💲${Number(row.price).toLocaleString('es-DO')}` : '';
-  return `<div class="item"><img src="${esc(imgOf(p))}" loading="lazy" onerror="this.src='${PH}'" data-open="${esc(ref)}"><div class="info" data-open="${esc(ref)}"><b>${esc(p.title)}</b><span class="mut">${esc(ref)}${loc}${pr}</span>${isAdmin() ? '<span class="edithint">✏️ Toca para poner costo y precio</span>' : ''}</div>
+  return `<div class="item"><img src="${esc(imgOf(p))}" loading="lazy" onerror="this.src='${PH}'" data-open="${esc(ref)}"><div class="info" data-open="${esc(ref)}"><b>${esc(p.title)}</b><span class="mut">${esc(ref)}${loc}${pr}</span>${isPrincipal() ? '<span class="edithint">✏️ Toca para editar</span>' : ''}</div>
     <input type="number" inputmode="numeric" min="0" value="${qty}" data-set="${kind}" data-ref="${esc(ref)}"><button data-del="${kind}" data-ref="${esc(ref)}">🗑</button></div>`;
 }
 function setQty(kind, ref, n){
@@ -954,31 +964,57 @@ function openDetail(ref){
       <tr><td>Referencia / SKU</td><td><b>${esc(ref)}</b></td></tr>
       <tr><td>Stock</td><td><b>${Number(row.stock)||0}</b></td></tr>
       <tr><td>Ubicación</td><td>${locsOf(row).length ? locsOf(row).map(l=>esc(locLabel(l))).join('<br>') : esc(locLabel(''))}</td></tr>
-      ${canEditPrice() ? '' : `<tr><td>Precio</td><td>${money(row.price)}</td></tr>`}
-      ${canCost() && !canEditPrice() ? `<tr><td>Costo</td><td>${money(row.cost)}</td></tr>` : ''}
+      ${isPrincipal() ? '' : `<tr><td>Precio</td><td>${money(row.price)}</td></tr>`}
+      ${canCost() && !isPrincipal() ? `<tr><td>Costo</td><td>${money(row.cost)}</td></tr>` : ''}
       <tr><td>Código Zebra</td><td>${esc(ic[ref] || '—')}</td></tr>
       <tr><td>Códigos de barras</td><td>${codes.map(esc).join('<br>') || '—'}</td></tr>
       ${p.oe ? `<tr><td>OE</td><td>${esc(p.oe)}</td></tr>` : ''}
       ${(()=>{ const all = [...new Set(p.refs.concat(row.oeRefs||[]))]; return all.length ? `<tr><td>Ref. / artículo original</td><td>${all.map(esc).join('<br>')}</td></tr>` : ''; })()}
     </table>
-    ${isAdmin() ? `<div class="pricebox"><div class="pbt">📍 Dónde va ubicado</div>
+    ${isPrincipal() ? `<div class="pricebox" id="editBox"><div class="pbt">✏️ Editar artículo <span class="mut" style="font-weight:500">(solo tu usuario)</span></div>
+      <div class="mut">SKU <b style="color:#fff">${esc(ref)}</b> · Código Zebra <b style="color:#fff">${esc(ic[ref] || '—')}</b> (no se cambian)</div>
+      <label>Nombre<input id="edTitle" type="text" value="${esc(p.title)}"></label>
       <div class="locin"><label>Tramo<input id="lfTramo" type="text" autocomplete="off" autocapitalize="characters" value="${esc((row.location||'').split('/')[0] || '')}" placeholder="Ej. 3"></label>
-      <label>Estante<input id="lfEst" type="text" autocomplete="off" autocapitalize="characters" value="${esc((row.location||'').split('/')[1] || '')}" placeholder="Ej. 2"></label>
-      <button id="lfSave" data-ref="${esc(ref)}">Guardar</button></div></div>` : ''}
-    ${canEditPrice() ? `<div class="pricebox"><div class="pbt">💲 Costo y precio</div>
-      ${canCost() ? `<label>Costo (US$)<input id="pfCost" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(row.cost ?? '')}" placeholder="0.00"></label>` : ''}
+      <label>Estante<input id="lfEst" type="text" autocomplete="off" autocapitalize="characters" value="${esc((row.location||'').split('/')[1] || '')}" placeholder="Ej. 2"></label><span></span></div>
+      <label>Cantidad en stock<input id="edStock" type="number" inputmode="numeric" min="0" step="1" value="${Number(row.stock)||0}"></label>
+      <label>Costo (US$)<input id="pfCost" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(row.cost ?? '')}" placeholder="0.00"></label>
       <label>Precio final (US$)<input id="pfPrice" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(row.price ?? '')}" placeholder="0.00"></label>
-      ${canCost() ? `<div class="mut" id="pfMargin"></div>` : ''}
-      <button class="pri big" id="pfSave" data-ref="${esc(ref)}">Guardar costo y precio</button></div>` : ''}
+      <div class="mut" id="pfMargin"></div>
+      <label>Referencias / artículo original <small class="mut">(una por línea)</small><textarea id="edOe" rows="3" placeholder="Ej. Volvo 20514235">${esc((row.oeRefs||[]).join('\n'))}</textarea></label>
+      ${p.refs.length ? `<div class="mut">Del catálogo (fijas): ${esc(p.refs.join(', '))}</div>` : ''}
+      <button class="pri big" id="edSave" data-ref="${esc(ref)}">💾 Guardar cambios</button></div>` : ''}
     ${isAdmin() ? `<button class="big" style="margin-top:12px" onclick="etPrintSku('${esc(ref)}')">🖨 Imprimir etiqueta (SKU grande)</button>` : ''}
     ${historyHtml(ref, v)}
     <button class="big" style="margin-top:14px" onclick="document.getElementById('sheet').classList.remove('on')">Cerrar</button>`;
   $('sheet').classList.add('on');
-  if(canEditPrice()) bindPriceForm();
-  if(isAdmin()) $('lfSave').onclick = ()=>{
+  if(isPrincipal()) bindEditForm(row, p);
+}
+function bindEditForm(row, p){
+  const c = $('pfCost'), pr = $('pfPrice'), mg = $('pfMargin');
+  const upd = ()=>{ const a = Number(c.value), b = Number(pr.value); mg.textContent = (c.value !== '' && pr.value !== '' && a > 0) ? `Ganancia: US$ ${(b - a).toFixed(2)} (${(((b - a) / a) * 100).toFixed(1)} %)` : ''; };
+  c.oninput = upd; pr.oninput = upd; upd();
+  $('edStock').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); $('edSave').click(); } });
+  $('edSave').onclick = ()=>{
+    const ref = $('edSave').dataset.ref; let n = 0;
+    const title = $('edTitle').value.trim();
+    if(!title) return toast('El nombre no puede quedar vacío.', 'bad');
     const t = $('lfTramo').value.trim(), e = $('lfEst').value.trim();
-    if(!t || !e) return toast('Escribe tramo y estante.', 'bad');
-    queue({t:'setLoc', ref:$('lfSave').dataset.ref, location: t + '/' + e}); toast(`📍 Tramo ${t} · Estante ${e}`, 'ok'); $('sheet').classList.remove('on');
+    if((t && !e) || (!t && e)) return toast('Escribe tramo y estante (los dos).', 'bad');
+    if((c.value.trim() && !isFinite(Number(c.value))) || (pr.value.trim() && !isFinite(Number(pr.value)))) return toast('Costo o precio no válido.', 'bad');
+    if(title !== p.title){ queue({t:'setEdit', ref, edit:{title}}); n++; }
+    if(t && e && (t + '/' + e) !== (row.location || '')){ queue({t:'setLoc', ref, location: t + '/' + e}); n++; }
+    const num = x=> x.trim() === '' ? '' : Math.max(0, Math.round(Number(x) * 100) / 100);
+    const cost = num(c.value), price = num(pr.value);
+    if(String(cost) !== String(row.cost ?? '') || String(price) !== String(row.price ?? '')){ queue({t:'setPrice', ref, cost, price}); n++; }
+    const oe = [...new Set($('edOe').value.split(/\n+/).map(x=>x.trim()).filter(Boolean))];
+    if(JSON.stringify(oe) !== JSON.stringify(row.oeRefs || [])){ queue({t:'setOe', ref, oeRefs: oe}); n++; }
+    const stTxt = $('edStock').value.trim();
+    if(stTxt !== ''){ const st = Math.max(0, Math.round(Number(stTxt))); if(!isFinite(st)) return toast('Cantidad no válida.', 'bad');
+      const antes = Number(row.stock) || 0;
+      if(st !== antes){ queue({t:'setStock', ref, stock: st, diff: st - antes, title, loc: row.location || '', id: 'aj-' + Date.now() + '-' + Math.random().toString(36).slice(2,6), at: new Date().toISOString(), by: cfg.usuario}); n++; } }
+    try{ rebuildCodes(); }catch(e){}
+    toast(n ? '✔ Artículo actualizado' : 'No había cambios.', 'ok'); $('sheet').classList.remove('on');
+    if(currentTab === 'bus') doSearch(true);
   };
 }
 function canCost(){ return MAIN_ADMINS.includes(cfg.usuario) || !!cfg.costo; }
@@ -999,7 +1035,7 @@ function historyHtml(ref, v){
   const m = v.meta || {}; const ev = [];
   const fmt = d=>{ const x = new Date(d); return isNaN(x) ? String(d||'') : x.toLocaleString('es-DO',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}); };
   (m.receivingKardex||[]).forEach(k=>(k.items||[]).forEach(it=>{ if(it.ref === ref) ev.push({d:k.date, ic:'🚚', t:'Recepción de mercancía', s:`${k.user||''}${it.location ? ' · 📍 ' + locLabel(it.location) : ''}${k.origen === 'celular' ? ' · 📱' : ''}`, q:'+' + it.qty, c:'in'}); }));
-  (m.inventoryEntriesLog||[]).forEach(k=>(k.items||[]).forEach(it=>{ if(it.ref === ref) ev.push({d:k.date, ic:'📦', t:'Entrada de inventario', s:`${k.user||''} · 📍 ${locLabel(k.area)}${k.origen === 'celular' ? ' · 📱' : ''}`, q:'+' + it.qty, c:'in'}); }));
+  (m.inventoryEntriesLog||[]).forEach(k=>(k.items||[]).forEach(it=>{ if(it.ref !== ref) return; if(k.area === 'Ajuste de stock'){ const q = Number(it.qty)||0; ev.push({d:k.date, ic:'✏️', t:'Ajuste de stock', s:`${k.user||''}${k.origen === 'celular' ? ' · 📱' : ''}`, q:(q >= 0 ? '+' : '') + q, c: q >= 0 ? 'in' : 'out'}); return; } ev.push({d:k.date, ic:'📦', t:'Entrada de inventario', s:`${k.user||''} · 📍 ${locLabel(k.area)}${k.origen === 'celular' ? ' · 📱' : ''}`, q:'+' + it.qty, c:'in'}); }));
   (m.salesLog||[]).forEach(x=>{ if(x.ref === ref) ev.push({d:x.date, ic:'↘', t:'Salida / venta', s:'', q:'−' + x.qty, c:'out'}); });
   (m.countAreas||[]).forEach(a=>{ const n = a.counts && a.counts[ref]; if(n > 0) ev.push({d:null, ic:'🔢', t:'Contado, pendiente de cerrar', s:'📍 ' + locLabel(a.tramo + '/' + a.estante), q:String(n), c:'cnt'}); });
   ((v.rec && v.rec.items)||[]).forEach(it=>{ if(it.ref === ref && it.qty > 0) ev.push({d:null, ic:'🕓', t:'En recepción, pendiente de cerrar', s:'', q:String(it.qty), c:'cnt'}); });
@@ -1052,7 +1088,7 @@ async function doLogin(){
     const r = await fetch(cfg.url + '/api/login', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({usuario:u, clave:pw, app:APP})});
     const j = await r.json().catch(()=>({}));
     if(!r.ok){ $('loginErr').textContent = j.error || 'Usuario o clave incorrectos.'; return; }
-    cfg.token = j.token; cfg.usuario = j.usuario; cfg.rol = j.rol; cfg.nombre = j.nombre; cfg.costo = !!j.costo; save(LS.cfg, cfg);
+    cfg.token = j.token; cfg.usuario = j.usuario; cfg.rol = j.rol; cfg.nombre = j.nombre; cfg.costo = !!j.costo; cfg.superAdmin = !!j.superAdmin; save(LS.cfg, cfg);
     $('lp').value = ''; startApp();
   }catch(e){ $('loginErr').textContent = 'No hay conexión con el servidor de la PC.'; }
   finally{ $('lbtn').disabled = false; }
