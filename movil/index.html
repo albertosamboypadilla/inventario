@@ -410,6 +410,7 @@ OPS.setStock = {
   meta(m, o){ m = m || {}; m.inventoryEntriesLog = [{id: o.id, date: o.at, area: 'Ajuste de stock', user: o.by, origen: 'celular', items: [{ref: o.ref, title: o.title, qty: o.diff, location: o.loc || ''}]}].concat((m.inventoryEntriesLog || []).filter(e=>e.id !== o.id)).slice(0, 500); return m; },
   inv(r, o){ r = r || defaultRow(o.ref); r.stock = o.stock; return r; }
 };
+OPS.addLoc = { inv(r, o){ r = r || defaultRow(o.ref); if(!r.location) r.location = o.location; else if(r.location !== o.location) r.extraLocations = [...new Set((r.extraLocations||[]).concat([o.location]))]; return r; } };
 OPS.setLoc = { inv(r, o){ r = r || defaultRow(o.ref); r.location = o.location; return r; } };
 OPS.setPrice = { inv(r, o){ r = r || defaultRow(o.ref); if('cost' in o) r.cost = o.cost; if('price' in o) r.price = o.price; return r; } };
 // Cerrar entrada de un área (igual que en la PC): suma al stock, vacía lo contado y deja historial
@@ -497,7 +498,7 @@ function areaSel(){ const v = $('areaSel').value; if(!v) return null; const [tra
 function handleCode(code, source){
   code = String(code||'').trim(); if(!code) return;
   const p = findByCode(code);
-  if(currentTab === 'bus'){ $('inBus').value = code; doSearch(); if(p){ beep(true); openDetail(p.ref); if(isPrincipal()) setTimeout(()=>{ const q = $('edStock'); if(q){ q.focus(); q.select(); } }, 250); } else { beep(false); toast(lastAmbiguous ? `${code} es referencia original de varios artículos. Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); } return; }
+  if(currentTab === 'bus'){ $('inBus').value = code; doSearch(); if(p){ beep(true); openDetail(p.ref); if(isPrincipal()) setTimeout(()=> openEditBox(true), 200); } else { beep(false); toast(lastAmbiguous ? `${code} es referencia original de varios artículos. Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); } return; }
   if(!p){ beep(false); toast(lastAmbiguous ? `${code} es referencia original de ${lastAmbiguous.length} artículos (${lastAmbiguous.slice(0,3).join(', ')}…). Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); return; }
   if(!isAdmin()){ beep(false); toast('Solo un administrador puede contar o recibir. Usa Buscar.', 'bad'); return; }
   const now = new Date();
@@ -544,7 +545,8 @@ function etSetCopies(n){ n = Math.max(1, Math.min(50, parseInt(n, 10) || 1)); tr
 function etToggleHtml(){
   const on = etAutoPrintOn();
   return `<button type="button" class="et-switch ${on ? 'on' : ''}" onclick="etSetAutoPrint(!etAutoPrintOn())">🖨 Etiqueta: <b>${on ? 'ACTIVADA' : 'DESACTIVADA'}</b></button>
-    <label class="et-copies-lbl">Etiquetas por SKU <input type="number" class="et-copies" min="1" max="50" value="${etCopies()}" inputmode="numeric" onchange="etSetCopies(this.value)" oninput="etSetCopies(this.value)"></label>` + etFieldsHtml();
+    <details class="et-more"><summary>⚙ Opciones de etiqueta</summary>
+    <label class="et-copies-lbl">Etiquetas por SKU <input type="number" class="et-copies" min="1" max="50" value="${etCopies()}" inputmode="numeric" onchange="etSetCopies(this.value)" oninput="etSetCopies(this.value)"></label>` + etFieldsHtml() + `</details>`;
 }
 function etFields(){ const d = {sku:true, name:true, brand:false, barcode:false, oe:false}; try{ return Object.assign(d, JSON.parse(localStorage.getItem('et_fields') || '{}')); }catch(e){ return d; } }
 function etSetField(k, on){ const f = etFields(); f[k] = !!on; try{ localStorage.setItem('et_fields', JSON.stringify(f)); }catch(e){} document.querySelectorAll('.et-f-' + k).forEach(c=>c.checked = !!on); etRefreshPreviews(); }
@@ -926,11 +928,20 @@ function doSearch(more){
       if(!words.every(w=>hay.includes(w))){ if(!(_nq.length >= 5 && (_dyn ? p._hayN + normCode(_dyn) : p._hayN).includes(_nq))) continue; } }
     res.push(p);
   }
-  // los que están en stock primero (de más a menos); el código exacto escaneado, arriba de todo
-  const st = new Map(res.map(p=>[p.ref, stockOf(p.ref)]));
-  // con búsqueda: primero los SKU que coinciden (exacto → empieza → contiene, los más cortos primero); luego en stock
-  const rk = new Map(res.map(p=>{ const r = p.ref.toLowerCase(), nr = skuN(r), nq = skuN(q); return [p.ref, !q ? 3 : (r === q || nr === nq) ? 0 : (r.startsWith(q) || nr.startsWith(nq)) ? 1 : (r.includes(q) || (nq.length >= 2 && nr.includes(nq))) ? 2 : 3]; }));
-  res.sort((a, b)=> (b === exact) - (a === exact) || rk.get(a.ref) - rk.get(b.ref) || (rk.get(a.ref) <= 2 ? skuN(a.ref).length - skuN(b.ref).length : 0) || (st.get(b.ref) > 0) - (st.get(a.ref) > 0) || st.get(b.ref) - st.get(a.ref) || a.title.localeCompare(b.title, 'es'));
+  // stock de cada artículo, leído UNA sola vez (antes se recalculaba todo por cada artículo: 3 s)
+  const guest = isGuest(); const stOf = p=> guest ? (Number(PUB.stock[p.ref]) || 0) : (Number((v.inv[p.ref] || {}).stock) || 0);
+  const st = new Map(); for(const p of res) st.set(p.ref, stOf(p));
+  if(!q){
+    // sin búsqueda: primero los que tienen stock (de más a menos); el resto queda en su orden, sin ordenar los 42 mil
+    const con = [], sin = []; for(const p of res) (st.get(p.ref) > 0 ? con : sin).push(p);
+    con.sort((a, b)=> st.get(b.ref) - st.get(a.ref) || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0));
+    res = con.concat(sin);
+  } else {
+    // con búsqueda: SKU exacto → empieza → contiene (más cortos primero); luego en stock
+    const nq = skuN(q); const key = new Map();
+    for(const p of res){ const r = p.ref.toLowerCase(), nr = skuN(r); key.set(p.ref, [p === exact ? 0 : 1, (r === q || nr === nq) ? 0 : (r.startsWith(q) || nr.startsWith(nq)) ? 1 : (r.includes(q) || (nq.length >= 2 && nr.includes(nq))) ? 2 : 3, nr.length]); }
+    res.sort((a, b)=>{ const ka = key.get(a.ref), kb = key.get(b.ref); return ka[0] - kb[0] || ka[1] - kb[1] || (ka[1] <= 2 ? ka[2] - kb[2] : 0) || (st.get(b.ref) > 0) - (st.get(a.ref) > 0) || st.get(b.ref) - st.get(a.ref) || (a.title < b.title ? -1 : a.title > b.title ? 1 : 0); });
+  }
   const enStock = res.filter(p=>st.get(p.ref) > 0).length;
   const head = `<div class="mut" style="margin:2px 4px 8px">${res.length.toLocaleString('es-DO')} artículo(s)${q ? ` para “${esc(q)}”` : ''} · <b style="color:#86efac">${enStock.toLocaleString('es-DO')} en stock</b> (primero)</div>`;
   const shown = res.slice(0, busShown);
@@ -971,7 +982,8 @@ function openDetail(ref){
       ${p.oe ? `<tr><td>OE</td><td>${esc(p.oe)}</td></tr>` : ''}
       ${(()=>{ const all = [...new Set(p.refs.concat(row.oeRefs||[]))]; return all.length ? `<tr><td>Ref. / artículo original</td><td>${all.map(esc).join('<br>')}</td></tr>` : ''; })()}
     </table>
-    ${isPrincipal() ? `<div class="pricebox" id="editBox"><div class="pbt">✏️ Editar artículo <span class="mut" style="font-weight:500">(solo tu usuario)</span></div>
+    ${isPrincipal() ? `<button class="pri big" id="edOpen" style="margin-top:12px">✏️ Editar artículo</button>
+    <div class="pricebox" id="editBox" style="display:none"><div class="pbt">✏️ Editar artículo <span class="mut" style="font-weight:500">(solo tu usuario)</span></div>
       <div class="mut">SKU <b style="color:#fff">${esc(ref)}</b> · Código Zebra <b style="color:#fff">${esc(ic[ref] || '—')}</b> (no se cambian)</div>
       <label>Nombre<input id="edTitle" type="text" value="${esc(p.title)}"></label>
       <div class="locin"><label>Tramo<input id="lfTramo" type="text" autocomplete="off" autocapitalize="characters" value="${esc((row.location||'').split('/')[0] || '')}" placeholder="Ej. 3"></label>
@@ -989,7 +1001,22 @@ function openDetail(ref){
   $('sheet').classList.add('on');
   if(isPrincipal()) bindEditForm(row, p);
 }
+function openEditBox(focusStock){ const b = $('editBox'), o = $('edOpen'); if(!b) return; b.style.display = ''; if(o) o.style.display = 'none'; setTimeout(()=>{ (focusStock ? $('edStock') : $('edTitle')).focus(); if(focusStock) $('edStock').select(); b.scrollIntoView({behavior:'smooth', block:'start'}); }, 80); }
+// alerta de ubicación al editar (mismo sonido y ventana que en Inventario)
+function askLocChange(p, row, here, done){
+  let ov = $('locAlert'); if(!ov){ ov = document.createElement('div'); ov.id = 'locAlert'; document.body.appendChild(ov); }
+  ov.innerHTML = `<div class="la-box"><div class="la-kick">⚠ ESTE ARTÍCULO YA TIENE UBICACIÓN</div>
+    <div class="la-prod"><img src="${esc(imgOf(p))}" onerror="this.src='${PH}'"><div><b>${esc(p.title)}</b><span class="mut">${esc(p.ref)}</span></div></div>
+    ${locsOf(row).map(l=>`<div class="la-big">📍 ${esc(locLabel(l))}</div>`).join('')}
+    <div class="mut" style="margin:8px 0 14px">Nueva ubicación: <b style="color:#fff">${esc(locLabel(here))}</b></div>
+    <button class="big la-move" data-la="move">↪ Cambiarlo a la nueva<small>sale de la anterior</small></button>
+    <button class="big la-both" data-la="both">➕ Dejarlo en las dos<small>queda en las dos ubicaciones</small></button>
+    <button class="big la-take" data-la="keep">✋ Dejarlo donde está<small>no cambia la ubicación</small></button></div>`;
+  ov.classList.add('on'); alertBeep();
+  ov.onclick = e=>{ const b = e.target.closest('[data-la]'); if(!b) return; ov.classList.remove('on'); done(b.dataset.la); };
+}
 function bindEditForm(row, p){
+  if($('edOpen')) $('edOpen').onclick = ()=> openEditBox(false);
   const c = $('pfCost'), pr = $('pfPrice'), mg = $('pfMargin');
   const upd = ()=>{ const a = Number(c.value), b = Number(pr.value); mg.textContent = (c.value !== '' && pr.value !== '' && a > 0) ? `Ganancia: US$ ${(b - a).toFixed(2)} (${(((b - a) / a) * 100).toFixed(1)} %)` : ''; };
   c.oninput = upd; pr.oninput = upd; upd();
@@ -1001,8 +1028,17 @@ function bindEditForm(row, p){
     const t = $('lfTramo').value.trim(), e = $('lfEst').value.trim();
     if((t && !e) || (!t && e)) return toast('Escribe tramo y estante (los dos).', 'bad');
     if((c.value.trim() && !isFinite(Number(c.value))) || (pr.value.trim() && !isFinite(Number(pr.value)))) return toast('Costo o precio no válido.', 'bad');
+    const here = (t && e) ? t + '/' + e : '';
+    if(here && row.location && !locsOf(row).includes(here)){
+      return askLocChange(p, row, here, mode=>{ if(mode === 'keep'){ $('lfTramo').value = (row.location||'').split('/')[0] || ''; $('lfEst').value = (row.location||'').split('/')[1] || ''; }
+        else if(mode === 'move') queue({t:'setLoc', ref, location: here});
+        else if(mode === 'both') queue({t:'addLoc', ref, location: here});
+        row = Object.assign({}, row, {location: mode === 'move' ? here : row.location}); saveRest(mode === 'keep' ? 0 : 1); });
+    }
+    if(here && !row.location){ queue({t:'setLoc', ref, location: here}); n++; }
+    return saveRest(n);
+    function saveRest(n){
     if(title !== p.title){ queue({t:'setEdit', ref, edit:{title}}); n++; }
-    if(t && e && (t + '/' + e) !== (row.location || '')){ queue({t:'setLoc', ref, location: t + '/' + e}); n++; }
     const num = x=> x.trim() === '' ? '' : Math.max(0, Math.round(Number(x) * 100) / 100);
     const cost = num(c.value), price = num(pr.value);
     if(String(cost) !== String(row.cost ?? '') || String(price) !== String(row.price ?? '')){ queue({t:'setPrice', ref, cost, price}); n++; }
@@ -1015,6 +1051,7 @@ function bindEditForm(row, p){
     try{ rebuildCodes(); }catch(e){}
     toast(n ? '✔ Artículo actualizado' : 'No había cambios.', 'ok'); $('sheet').classList.remove('on');
     if(currentTab === 'bus') doSearch(true);
+    }
   };
 }
 function canCost(){ return MAIN_ADMINS.includes(cfg.usuario) || !!cfg.costo; }
@@ -1331,6 +1368,36 @@ nav button.on span{transform:translateY(-1px) scale(1.12)!important}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
+
+/* --- ajuste a la pantalla del celular: más artículos por pantalla, menos espacio perdido --- */
+html,body{overflow-x:hidden}
+.res{padding:8px 10px!important;gap:10px!important;border-radius:14px!important;margin-bottom:8px!important;min-height:0!important}
+.res img{width:52px!important;height:52px!important;min-width:52px!important;border-radius:10px!important}
+.res .info b{font-size:15px!important;line-height:1.2!important;display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.res .info .mut,.res .locline{font-size:13px!important}
+.res .stock{font-size:18px!important;min-width:54px!important}.res .stock small{font-size:10px!important}
+#sheetIn > img{max-height:150px!important;width:100%!important;object-fit:contain!important}
+#sheetIn h3{font-size:19px!important}
+.locbig{padding:10px 12px!important}.locbig b{font-size:20px!important}
+#sheetIn table td{padding:7px 6px!important;font-size:14px!important}
+.et-more{width:100%;margin-top:6px}.et-more summary{cursor:pointer;color:#fdba74;font-weight:700;font-size:14px;padding:6px 0;list-style:none}
+.et-more[open] summary{margin-bottom:8px}.et-more .et-copies-lbl{margin-bottom:8px}
+.etp{gap:8px!important;margin-top:8px!important}.et-switch{padding:9px 14px!important;font-size:14px!important}
+.card,.panel,section > .box{padding:12px!important}
+.item{padding:8px 10px!important;gap:10px!important}.item img{width:46px!important;height:46px!important}
+#editBox label{font-size:13px}#editBox input{padding:10px!important;font-size:17px!important}
+@media (max-width:380px){.res img{width:44px!important;height:44px!important;min-width:44px!important}.res .info b{font-size:14px!important}}
+
+/* compacto v2: ~8 artículos por pantalla */
+#listBus{gap:6px!important}
+.res{margin-bottom:0!important;padding:7px 10px!important}
+.res .info b{-webkit-line-clamp:1!important;font-size:15px!important}
+.res .info{line-height:1.25!important}
+.res .info .mut{display:inline!important}
+.res .info .locline{display:inline!important;margin-left:6px!important;font-size:12.5px!important;white-space:nowrap}
+.res .info .locline::before{content:'· ';color:#64748b}
+.res img{width:46px!important;height:46px!important;min-width:46px!important}
+.res .stock{font-size:17px!important;line-height:1.05!important}
 </style>
 <script id="tema-forja-app-js">/* EUROTRUCK ESCÁNER · efectos del tema "Forja" (solo visual, no cambia funciones) */
 (function(){
