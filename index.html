@@ -1,13 +1,13 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><meta name="theme-color" content="#04060a"><meta name="description" content="Eurotruck: repuestos genuinos y OEM para Scania, Volvo, Mercedes-Benz, MAN, Iveco y DAF. Busca por chasis en 3D, número original o código. Servicio a domicilio 24h en República Dominicana.">
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><meta name="theme-color" content="#07080b"><meta name="description" content="Eurotruck: repuestos genuinos y OEM para Scania, Volvo, Mercedes-Benz, MAN, Iveco y DAF. Busca por chasis en 3D, número original o código. Servicio a domicilio 24h en República Dominicana.">
 <link rel="icon" href="/img/icono.svg" type="image/svg+xml">
-<script>window.ET_BUILD='20261109122556';(function(){var d=document.documentElement;setTimeout(function(){d.classList.add('et-ready')},7000);
+<script>window.ET_BUILD='20261109124409';(function(){var d=document.documentElement;setTimeout(function(){d.classList.add('et-ready')},7000);
 try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){if(j&&j.build&&j.build!==window.ET_BUILD&&!sessionStorage.getItem('et_v_'+j.build)){sessionStorage.setItem('et_v_'+j.build,'1');location.reload();}}).catch(function(){});}catch(e){}})();</script>
 </head><body>
 <title>Eurotruck | Repuestos / Servicios</title>
-<script src="/js/vendor/jspdf.umd.min.js?v=20261109122556"></script>
-<link rel="stylesheet" href="/css/base.css?v=20261109122556">
-<link rel="stylesheet" href="/css/eurotruck.css?v=20261109122556">
-<link rel="stylesheet" href="/css/taller.css?v=20261109122556">
+<script src="/js/vendor/jspdf.umd.min.js?v=20261109124409"></script>
+<link rel="stylesheet" href="/css/base.css?v=20261109124409">
+<link rel="stylesheet" href="/css/eurotruck.css?v=20261109124409">
+<link rel="stylesheet" href="/css/taller.css?v=20261109124409">
 
 
 <div id="splash" aria-hidden="true"><div class="sp-logo"><span class="sp-ring"></span><b>EUROTRUCK</b><small>REPUESTOS · SERVICIOS</small></div></div>
@@ -266,23 +266,27 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
 <!-- compatibilidad con el código existente (carrusel anterior) -->
 <div hidden aria-hidden="true"><button id="fleetPrev"></button><button id="fleetNext"></button><span id="fleetTitle"></span><p id="fleetCaption"></p></div>
 
-<!-- EPC: buscar por chasis en 3D -->
-<div class="et-epc" id="epcOverlay" role="dialog" aria-modal="true" aria-label="Buscar por chasis" hidden>
-  <div class="et-epc-top">
-    <div class="et-epc-title"><b>EPC</b> <span data-en="Electronic parts catalog">Catálogo electrónico de piezas</span></div>
-    <form class="et-epc-vin" id="epcVinForm"><input id="epcVin" autocomplete="off" spellcheck="false" maxlength="24" placeholder="Chasis / VIN"><button class="et-btn et-btn--accent" type="submit" data-en="Identify">Identificar</button></form>
-    <button class="et-epc-close" type="button" onclick="EPC.cerrar()" aria-label="Cerrar">✕</button>
-  </div>
-  <div class="et-epc-body">
-    <div class="et-epc-stage"><div id="epc3d"></div><div class="et-hero-tip" id="epcTip" hidden></div>
-      <div class="et-epc-tools"><button type="button" id="epcXray" hidden></button><button type="button" onclick="EPC.general()" data-en="All systems">Todos los sistemas</button></div>
-    </div>
-    <aside class="et-epc-side">
-      <div class="et-epc-truck" id="epcTruck"></div>
-      <nav class="et-epc-crumbs" id="epcCrumbs"></nav>
-      <div class="et-epc-find"><input id="epcFind" placeholder="Filtrar o escribir número original…" autocomplete="off"></div>
-      <div class="et-epc-list" id="epcList"></div>
-    </aside>
+<!-- EPC: catálogo electrónico estilo concesionario -->
+<div class="et-epc mx" id="epcOverlay" role="dialog" aria-modal="true" aria-label="Catálogo electrónico de piezas" hidden>
+  <header class="mx-top">
+    <div class="mx-logo"><b>EPC</b><span>EUROTRUCK</span></div>
+    <form class="mx-vin" id="epcVinForm"><label for="epcVin">Chasis / VIN</label><input id="epcVin" autocomplete="off" spellcheck="false" maxlength="24" placeholder="Escribe el chasis y Enter"><button type="submit" data-en="Identify">Identificar</button></form>
+    <form class="mx-pn" id="epcPnForm"><label for="epcPn" data-en="Part no.">N.º de pieza</label><input id="epcPn" autocomplete="off" spellcheck="false" placeholder="Original, SKU o GTIN"><button type="submit" data-en="Search">Buscar</button></form>
+    <button type="button" class="mx-cesta" id="epcCestaBtn"><span data-en="Order list">Lista de pedido</span> <b id="epcCestaN">0</b></button>
+    <button class="mx-close" type="button" onclick="EPC.cerrar()" aria-label="Cerrar">✕</button>
+  </header>
+  <div class="mx-veh" id="epcTruck"></div>
+  <div class="mx-body">
+    <nav class="mx-tree" aria-label="Grupos">
+      <div class="mx-tree-head"><span data-en="GROUPS">GRUPOS</span><input id="epcFind" placeholder="Filtrar…" autocomplete="off"></div>
+      <div class="mx-tree-list" id="epcTree"></div>
+    </nav>
+    <section class="mx-main mx-list">
+      <div class="mx-ill-head" id="epcCrumbs"></div>
+      <div class="mx-table-wrap" id="epcList"></div>
+      <div hidden><div id="epcLamina"></div><div id="epc3d"></div><div id="epcTip"></div><div id="epcIllNote"></div></div>
+    </section>
+    <aside class="mx-side mx-inv" id="epcSide"></aside>
   </div>
 </div>
 
@@ -558,14 +562,14 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
 <!-- ===== Sincronización en la nube (Firebase / Firestore) ===== -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="/js/config.js?v=20261109122556"></script>
+<script src="/js/config.js?v=20261109124409"></script>
 
-<script src="/js/datos/catalogo.js?v=20261109122556"></script>
-<script src="/js/app.js?v=20261109122556"></script>
+<script src="/js/datos/catalogo.js?v=20261109124409"></script>
+<script src="/js/app.js?v=20261109124409"></script>
 
 <!-- TEMA FORJA 3D (solo diseño) -->
 
 
-<script type="importmap">{"imports": {"three": "/js/vendor/three/three.module.min.js?v=20261109122556", "/js/piezas3d.js": "/js/piezas3d.js?v=20261109122556", "/js/vendor/three/RoomEnvironment.js": "/js/vendor/three/RoomEnvironment.js?v=20261109122556", "/js/vendor/three/OrbitControls.js": "/js/vendor/three/OrbitControls.js?v=20261109122556"}}</script>
-<script type="module" src="/js/sitio.js?v=20261109122556"></script>
+<script type="importmap">{"imports": {"three": "/js/vendor/three/three.module.min.js?v=20261109124409", "/js/piezas3d.js": "/js/piezas3d.js?v=20261109124409", "/js/vendor/three/RoomEnvironment.js": "/js/vendor/three/RoomEnvironment.js?v=20261109124409", "/js/vendor/three/OrbitControls.js": "/js/vendor/three/OrbitControls.js?v=20261109124409"}}</script>
+<script type="module" src="/js/sitio.js?v=20261109124409"></script>
 </body></html>

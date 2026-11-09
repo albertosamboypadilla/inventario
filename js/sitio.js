@@ -80,119 +80,335 @@ function equivalentes(p) {
 
 /* ───────── EPC ───────── */
 const EPC = (() => {
-  let visor = null, estado = { vin: null, marca: null, sis: null, sub: null, ref: null, filtro: '', lim: 60 };
+  let visor = null;
+  const estado = { vin: null, marca: null, sis: null, sub: null, ref: null, filtro: '', pn: '', lim: 40, tab: 'pieza', vendidas: false, lam: null, edit: false, pin: null };
+  /* Láminas propias: imagen subida por Eurotruck + puntos numerados enlazados al inventario (guardadas en este equipo) */
+  const LDB = { db: null,
+    abrir() { if (this.db) return Promise.resolve(this.db); return new Promise((ok, no) => { const r = indexedDB.open('et_laminas', 1); r.onupgradeneeded = () => r.result.createObjectStore('lam', { keyPath: 'id' }); r.onsuccess = () => ok(this.db = r.result); r.onerror = () => no(r.error); }); },
+    async todas() { const db = await this.abrir(); return new Promise(ok => { const q = db.transaction('lam').objectStore('lam').getAll(); q.onsuccess = () => ok(q.result || []); q.onerror = () => ok([]); }); },
+    async poner(l) { const db = await this.abrir(); return new Promise(ok => { const t = db.transaction('lam', 'readwrite'); t.objectStore('lam').put(l); t.oncomplete = ok; t.onerror = ok; }); },
+    async quitar(id) { const db = await this.abrir(); return new Promise(ok => { const t = db.transaction('lam', 'readwrite'); t.objectStore('lam').delete(id); t.oncomplete = ok; t.onerror = ok; }); } };
+  let LAMS = [];
+  const lamDe = id => LAMS.find(l => l.id === id);
+  const puedeEditar = () => typeof currentUser !== 'undefined' && !!currentUser;
+  // Sincronización con el servidor: todos los equipos ven las mismas láminas
+  const SRVL = () => { try { const v = typeof srvSettings === 'function' ? srvSettings() : null; return v && v.url ? v : null; } catch (e) { return null; } };
+  const subidas = new Map();
+  function subir(l, ya) {
+    clearTimeout(subidas.get(l.id));
+    subidas.set(l.id, setTimeout(async () => { const v = SRVL(); if (!v || !v.token || !puedeEditar()) return;
+      try { const body = Object.assign({}, l, { img: l.enServidor ? undefined : l.img });
+        const r = await fetch(v.url + '/api/laminas/' + encodeURIComponent(l.id), { method: 'PUT', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + v.token }, body: JSON.stringify(body) });
+        if (r.ok) { const j = await r.json(); l.mod = j.mod; l.pend = false; l.enServidor = true; LDB.poner(l); }
+        else { const j = await r.json().catch(() => ({})); typeof showToast === 'function' && showToast(tr2('No se pudo guardar la lámina en el servidor: ', 'Could not save the sheet on the server: ') + (j.error || r.status)); }
+      } catch (e) { /* sin conexión: queda pendiente y se sube la próxima vez */ } }, ya ? 0 : 1200));
+  }
+  async function cargarLams() {
+    let loc = []; try { loc = await LDB.todas(); } catch (e) {}
+    const v = SRVL(); let srv = null;
+    if (v) { try { if (typeof loadServerConfig === 'function') await loadServerConfig(); const r = await fetch(SRVL().url + '/api/laminas', { cache: 'no-store' }); if (r.ok) srv = (await r.json()).laminas || []; } catch (e) {} }
+    if (!srv) return loc;
+    const base = SRVL().url, m = new Map(srv.map(l => [l.id, Object.assign(l, { img: base + '/api/laminas/' + encodeURIComponent(l.id) + '/img?m=' + l.mod, enServidor: true })]));
+    for (const l of loc) { const x = m.get(l.id);
+      if (!x) { if (l.enServidor && !l.pend) { LDB.quitar(l.id); continue; } m.set(l.id, l); l.pend = true; subir(l, true); }   // nueva de este equipo: se sube
+      else if (l.pend && (l.mod || 0) > x.mod) { l.enServidor = true; m.set(l.id, Object.assign(l, { img: String(l.img).startsWith('data:') ? l.img : x.img })); subir(l, true); } }
+    return [...m.values()];
+  }
+  const guardarLam = l => { l.mod = Date.now(); l.pend = true; subir(l); return LDB.poner(l); };
+  function borrarLam(id) { LDB.quitar(id); const v = SRVL(); if (v && v.token) fetch(v.url + '/api/laminas/' + encodeURIComponent(id), { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + v.token } }).catch(() => {}); }
+  const CK = 'et_epc_cesta';
+  const cesta = { get() { try { return JSON.parse(localStorage.getItem(CK) || '[]'); } catch (e) { return []; } }, set(a) { try { localStorage.setItem(CK, JSON.stringify(a)); } catch (e) {} $('#epcCestaN').textContent = a.reduce((n, x) => n + x.q, 0); } };
   const ov = () => $('#epcOverlay');
+  const num = s => String(SIS.findIndex(x => x[0] === s) + 1).padStart(2, '0');
   function base() { const m = estado.marca; return window.__etProducts().filter(p => !m || p.brand === m || p.brand === 'Multibrand' || p.brand === 'DT Spare Parts'); }
   function stockDe(ref) { try { const i = peekInv(ref); return { n: Number(i.stock) || 0, loc: (i.location || (i.extraLocations || []).length) ? allLocationsLabel(i) : '' }; } catch (e) { return { n: 0, loc: '' }; } }
+  const oe1 = p => { const r = (p.refsList || [])[0] || p.oe || ''; return String(r).split(':').pop(); };
+
+  function vehiculo() {
+    const t = $('#epcTruck'), v = estado.vin;
+    if (!v) { t.innerHTML = `<div class="mx-veh-in"><span class="mx-k">${tr2('Sin chasis', 'No chassis')}</span><span class="mx-hint">${tr2('Escribe el chasis arriba o elige la marca:', 'Enter the chassis above or choose the brand:')}</span><div class="mx-chips">${MARCAS.map(m => `<button data-marca="${m}" class="${estado.marca === m ? 'is-on' : ''}">${m}</button>`).join('')}<button data-marca="" class="${!estado.marca ? 'is-on' : ''}">${tr2('Todas', 'All')}</button></div></div>`; return; }
+    const g = mem.get()[v.chasis] || {}; const foto = FOTOS[estado.marca] ? document.querySelector('#heroMedia img[data-truck="' + FOTOS[estado.marca] + '"]') : null;
+    t.innerHTML = `<div class="mx-veh-in">${foto ? `<img class="mx-veh-img" src="${foto.getAttribute('src')}" alt="">` : ''}
+      <dl class="mx-spec"><div><dt>${tr2('Chasis / VIN', 'Chassis / VIN')}</dt><dd class="mono">${esc(v.chasis)}</dd></div>
+      <div><dt>${tr2('Marca', 'Make')}</dt><dd>${estado.marca ? esc(estado.marca) : `<span class="mx-warn">${tr2('No detectada', 'Not detected')}</span>`}</dd></div>
+      <div><dt>${tr2('Año modelo', 'Model year')}</dt><dd>${v.anio || '—'}</dd></div>
+      <div class="mx-spec-wide"><dt>${tr2('Cliente / modelo', 'Customer / model')}</dt><dd><input id="epcCliente" maxlength="60" value="${esc(g.cliente || '')}" placeholder="${tr2('Ej: Transporte Pérez · R450', 'E.g. Perez Transport · R450')}"><button id="epcGuardar">${tr2('Guardar', 'Save')}</button></dd></div>
+      <div><dt>${tr2('Historial', 'History')}</dt><dd><button class="mx-link" data-vendidas>${(g.piezas || []).length} ${tr2('piezas vendidas', 'parts sold')}</button></dd></div></dl>
+      ${estado.marca ? '' : `<div class="mx-chips">${MARCAS.map(m => `<button data-marca="${m}">${m}</button>`).join('')}</div>`}</div>`;
+  }
+  function arbol() {
+    const f = estado.filtro.trim().toLowerCase(), cnt = {}, subs = new Map();
+    for (const p of base()) { const s = sistemaDe(p); cnt[s] = (cnt[s] || 0) + 1; if (s === estado.sis) { const k = subgrupo(p); subs.set(k, (subs.get(k) || 0) + 1); } }
+    $('#epcTree').innerHTML = SIS.filter(s => cnt[s[0]]).map(s => {
+      const abierto = s[0] === estado.sis; let hijos = '';
+      if (abierto) { const arr = [...subs].filter(([k]) => !f || k.toLowerCase().includes(f)).sort((a, b) => b[1] - a[1]);
+        const ls = LAMS.filter(l => l.sis === s[0]);
+        hijos = '<div class="mx-subs">' + ls.map(l => `<button data-lamid="${esc(l.id)}" class="mx-lamb ${l.id === estado.lam ? 'is-on' : ''}"><i>▦</i><span>${esc(l.titulo)}</span><small>${l.puntos.length}</small></button>`).join('') + arr.slice(0, estado.lim).map(([k, n], i) => `<button data-sub="${esc(k)}" class="${k === estado.sub ? 'is-on' : ''}"><i>${num(s[0])}.${String(i + 1).padStart(2, '0')}</i><span>${esc(k)}</span><small>${n}</small></button>`).join('') + (arr.length > estado.lim ? `<button data-more class="mx-more">${tr2('Ver más', 'More')} (${arr.length - estado.lim})</button>` : '') + '</div>'; }
+      if (f && !abierto && !(s[0] + s[1]).toLowerCase().includes(f)) return '';
+      return `<div class="mx-g ${abierto ? 'is-open' : ''}"><button data-sis="${esc(s[0])}"><i>${num(s[0])}</i><span>${esc(tr2(s[0], s[1]))}</span><small>${cnt[s[0]].toLocaleString()}</small></button>${hijos}</div>`;
+    }).join('');
+  }
   function migas() {
-    const c = [`<button data-go="sis">${esc(estado.marca || tr2('Todas las marcas', 'All brands'))}</button>`];
-    if (estado.sis) c.push(`<button data-go="sub">${esc(tr2(estado.sis, SIS_EN[estado.sis] || estado.sis))}</button>`);
-    if (estado.sub) c.push(`<button data-go="parts">${esc(estado.sub)}</button>`);
-    if (estado.ref) c.push(`<span>${esc(estado.ref)}</span>`);
+    let c = [`<button data-go="sis">${esc(estado.marca || tr2('Todas las marcas', 'All makes'))}</button>`];
+    if (estado.sis) c.push(`<button data-go="sub">${tr2('Grupo', 'Group')} ${num(estado.sis)} · ${esc(tr2(estado.sis, SIS_EN[estado.sis] || estado.sis))}</button>`);
+    if (estado.sub) c.push(`<span>${esc(estado.sub)}</span>`);
+    if (estado.lam && lamDe(estado.lam)) c.push(`<span>▦ ${esc(lamDe(estado.lam).titulo)}</span>`);
+    if (estado.pn) c = [`<span>${tr2('Búsqueda de N.º de pieza', 'Part no. search')}: <b class="mono">${esc(estado.pn)}</b></span>`];
     $('#epcCrumbs').innerHTML = c.join('<i>›</i>');
+    $('#epcIllNote').textContent = estado.sis ? tr2('Ilustración de referencia del grupo', 'Group reference illustration') : tr2('Toca una pieza o elige un grupo a la izquierda', 'Tap a part or choose a group on the left');
   }
-  function ficha() {
-    const t = $('#epcTruck'); const v = estado.vin;
-    if (!v) { t.innerHTML = `<div class="et-epc-hello"><b>${tr2('Escribe el chasis o VIN', 'Enter the chassis or VIN')}</b><span>${tr2('o elige la marca:', 'or choose the brand:')}</span><div class="et-chips">${MARCAS.map(m => `<button data-marca="${m}" class="${estado.marca === m ? 'is-on' : ''}">${m}</button>`).join('')}</div></div>`; return; }
-    const g = mem.get()[v.chasis] || {};
-    const foto = FOTOS[estado.marca] ? `<img class="et-epc-photo" src="${document.querySelector('#heroMedia img[data-truck="' + FOTOS[estado.marca] + '"]').getAttribute('src')}" alt="">` : '';
-    t.innerHTML = foto + `<div class="et-epc-id"><small>${tr2('Chasis', 'Chassis')}</small><b>${esc(v.chasis)}</b><div class="et-epc-tags">${estado.marca ? `<span class="is-acc">${esc(estado.marca)}</span>` : `<span class="is-warn">${tr2('Marca no detectada', 'Brand not detected')}</span>`}${v.anio ? `<span>${tr2('Año', 'Year')} ${v.anio}</span>` : ''}${g.cliente ? `<span>${esc(g.cliente)}</span>` : ''}</div>
-      ${estado.marca ? '' : `<div class="et-chips">${MARCAS.map(m => `<button data-marca="${m}">${m}</button>`).join('')}</div>`}
-      <div class="et-epc-client"><input id="epcCliente" maxlength="60" placeholder="${tr2('Cliente / modelo (opcional)', 'Customer / model (optional)')}" value="${esc(g.cliente || '')}"><button id="epcGuardar">${tr2('Guardar', 'Save')}</button></div></div>`;
+  const packN = p => (String(p.pack || '1').match(/\d+/) || ['1'])[0];
+  function filas(ps, conGrupo) {
+    if (!ps.length) return `<p class="mx-empty">${tr2('No hay piezas para mostrar.', 'No parts to show.')}</p>`;
+    return `<table class="mx-table"><thead><tr><th>Ref.</th><th>${tr2('N.º de pieza', 'Part no.')}</th><th class="c">A</th><th>${tr2('Designación', 'Designation')}</th><th>${tr2('N.º original', 'Original no.')}</th><th>${conGrupo ? tr2('Grupo', 'Group') : tr2('Nota', 'Note')}</th><th></th></tr></thead><tbody>` +
+      ps.map((p, i) => { const s = stockDe(p.ref); const eqn = s.n > 0 ? 0 : equivalentes(p).reduce((n, r) => n + stockDe(r).n, 0); const nota = s.n > 0 ? `<b class="ok">${s.n} ${tr2('en stock', 'in stock')}</b>${s.loc ? '<br>' + esc(s.loc) : ''}` : eqn > 0 ? `<b class="eqok">${tr2('Equivalente en stock', 'Equivalent in stock')} (${eqn})</b>` : `<span class="no">${tr2('Sin stock', 'Out of stock')}</span>`;
+        return `<tr data-ref="${esc(p.ref)}" data-pos="${i + 1}" class="${p.ref === estado.ref ? 'is-on' : ''}"><td class="mono r">${i + 1}${p.refsList && p.refsList.length ? ' <i class="mx-par">§</i>' : ''}</td><td class="mono b">${esc(p.sku || p.ref)}</td><td class="c">${packN(p)}</td><td class="d">${esc(p.title)}</td><td class="mono">${esc(oe1(p))}</td><td class="nota">${conGrupo ? `${num(sistemaDe(p))} · ${esc(subgrupo(p))}` : nota}</td><td><button class="mx-add" data-add="${esc(p.ref)}" title="${tr2('Agregar a la lista de pedido', 'Add to order list')}">＋</button></td></tr>`; }).join('') + '</tbody></table>';
   }
-  function lista() {
-    migas(); const L = $('#epcList'); const f = estado.filtro.trim().toLowerCase();
-    const oeq = norm(estado.filtro);
-    if (oeq.length >= 5 && /\d/.test(oeq)) { // número original escrito: búsqueda exacta en todo el inventario
-      const refs = [...(indiceOE().get(oeq) || [])]; const P = window.__etProducts();
-      const extra = P.filter(p => norm(p.ref) === oeq || norm(p.sku) === oeq).map(p => p.ref);
-      const all = [...new Set([...refs, ...extra])].map(r => PRODUCTS_BY_REF[r]).filter(Boolean);
-      L.innerHTML = `<div class="et-epc-h">${tr2('Número original', 'Original number')} <b>${esc(estado.filtro)}</b> · ${all.length} ${tr2('coincidencias', 'matches')}</div>` + (all.length ? piezasHTML(all) : `<p class="et-epc-empty">${tr2('No está en el catálogo ni en tu inventario.', 'Not in the catalog or your inventory.')}</p>`);
-      return;
-    }
-    if (estado.ref) return detalle();
-    if (!estado.sis) {
-      const cnt = {}; for (const p of base()) { const s = sistemaDe(p); cnt[s] = (cnt[s] || 0) + 1; }
-      L.innerHTML = `<div class="et-epc-h">${tr2('Elige un sistema (o toca su pieza en 3D)', 'Choose a system (or tap its 3D part)')}</div><div class="et-epc-sys">` +
-        SIS.filter(s => cnt[s[0]]).filter(s => !f || s[0].toLowerCase().includes(f) || s[1].toLowerCase().includes(f)).map(s => `<button data-sis="${esc(s[0])}">${icono(s[2])}<span>${esc(tr2(s[0], s[1]))}</span><small>${cnt[s[0]].toLocaleString()}</small></button>`).join('') + '</div>';
-      return;
-    }
+  // Lámina: las piezas (o grupos) dibujadas en blanco y negro técnico, numeradas con flechas, como un plano de despiece
+  function lamina(items, titulo) {
+    const L = $('#epcLamina'); if (!L) return;
+    if (!items.length) { L.innerHTML = `<div class="mx-lam-empty">${tr2('Sin ilustración', 'No illustration')}</div>`; return; }
+    const it = items.slice(0, 30);
+    L.innerHTML = `<div class="mx-lam-paper"><div class="mx-lam-title">${esc(titulo || '')}</div><div class="mx-lam-grid n${Math.min(it.length, 30)}">` + it.map((x, i) => {
+      const lado = i % 4; // flecha hacia distintas esquinas, como en un despiece
+      return `<button class="mx-lam-it ${x.on ? 'is-on' : ''}" data-lam="${esc(x.key)}" data-kind="${x.kind}" style="--r:${(i * 37) % 9 - 4}deg"><span class="mx-lam-img"><img loading="lazy" src="${esc(x.img || '')}" alt="" onerror="this.style.visibility='hidden'"></span><svg class="mx-lam-lead l${lado}" viewBox="0 0 40 40" aria-hidden="true"><path d="M2 2 L30 30"/></svg><b class="mx-lam-n">${esc(x.n)}</b></button>`; }).join('') + `</div>${items.length > 30 ? `<div class="mx-lam-more">+${items.length - 30} ${tr2('posiciones más en la tabla', 'more positions in the table')}</div>` : ''}<div class="mx-lam-foot"><span>EUROTRUCK · EPC</span><span>${tr2('Ilustración de referencia', 'Reference illustration')}</span></div></div>`;
+  }
+  function imgDe(ps) { const c = ps.find(p => PRODUCT_IMAGE_FILES[p.ref]) || ps[0]; return c ? c.img : ''; }
+  function lamStrip() {
+    if (!estado.sis) return '';
+    const ls = LAMS.filter(l => l.sis === estado.sis && (!estado.sub || !l.sub || l.sub === estado.sub));
+    if (!ls.length && !puedeEditar()) return '';
+    return `<div class="mx-lams">${ls.map(l => `<button data-lamid="${esc(l.id)}" class="mx-lamc"><img src="${l.img}" alt=""><span>${esc(l.titulo)}</span><small>${l.puntos.length} ${tr2('puntos', 'points')}</small></button>`).join('')}${puedeEditar() ? `<button data-lamnew class="mx-lamc nueva"><b>＋</b><span>${tr2('Nueva lámina', 'New sheet')}</span><small>${tr2('Sube una foto o dibujo tuyo', 'Upload your own photo or drawing')}</small></button>` : ''}</div>`;
+  }
+  function vistaLam() {
+    const l = lamDe(estado.lam), L = $('#epcList');
+    if (!l) { estado.lam = null; return tabla(); }
+    const ed = estado.edit && puedeEditar(), z = estado.zoom || 1;
+    const pts = l.puntos.slice().sort((a, b) => a.n - b.n);
+    const pins = pts.map(pt => `<button class="mx-pin${pt.ref ? '' : ' sin'}${pt.n === estado.pin ? ' is-pin' : ''}${pt.ref && pt.ref === estado.ref ? ' is-on' : ''}" data-pin="${pt.n}"${pt.ref ? ` data-lam="${esc(pt.ref)}" data-kind="ref"` : ''} style="left:${pt.x}%;top:${pt.y}%">${pt.n}</button>`).join('');
+    const rows = pts.map(pt => { const p = pt.ref && PRODUCTS_BY_REF[pt.ref]; const s = p ? stockDe(p.ref) : { n: 0, loc: '' };
+      const eqn = p && s.n <= 0 ? equivalentes(p).reduce((n, r) => n + stockDe(r).n, 0) : 0;
+      const nota = !p ? `<span class="no">${tr2('Sin enlazar', 'Not linked')}</span>` : s.n > 0 ? `<b class="ok">${s.n} ${tr2('en stock', 'in stock')}</b>${s.loc ? '<br>' + esc(s.loc) : ''}` : eqn > 0 ? `<b class="eqok">${tr2('Equivalente en stock', 'Equivalent in stock')} (${eqn})</b>` : `<span class="no">${tr2('Sin stock', 'Out of stock')}</span>`;
+      return `<tr data-pinrow="${pt.n}"${p ? ` data-ref="${esc(p.ref)}"` : ''} class="${(p && p.ref === estado.ref) || pt.n === estado.pin ? 'is-on' : ''}"><td class="mono r">${pt.n}</td><td class="mono b">${p ? esc(p.sku || p.ref) : '—'}</td><td class="d">${p ? esc(p.title) : ''}${pt.nota ? `<small class="mx-pnota">${esc(pt.nota)}</small>` : ''}</td><td class="mono">${p ? esc(oe1(p)) : ''}</td><td class="nota">${nota}</td></tr>`; }).join('');
+    L.innerHTML = `<div class="mx-th mx-lam-h">${ed ? `<input class="mx-lam-tit" data-lamtit maxlength="80" value="${esc(l.titulo)}">` : `<span><button class="mx-lam-arbol" data-lamarbol>☰ ${tr2('Grupos', 'Groups')}</button> ▦ ${esc(l.titulo)} · ${pts.length} ${tr2('piezas', 'parts')}</span>`}${puedeEditar() ? `<span class="mx-lam-btns">${ed ? `<button data-lamfin class="is-ed">✓ ${tr2('Terminar', 'Done')}</button>` : `<button data-lamed>✎ ${tr2('Editar lámina', 'Edit sheet')}</button>`}<button data-lamdel>${tr2('Borrar lámina', 'Delete sheet')}</button></span>` : ''}</div>
+      ${ed ? `<div class="mx-lam-tipbar">${tr2('Toca la imagen donde está cada pieza para poner el siguiente número. Toca un número para enlazarlo a tu inventario, moverlo o borrarlo.', 'Tap the image where each part is to drop the next number. Tap a number to link it, move it or delete it.')}</div>` : ''}
+      <div class="mx-stage${ed ? ' is-ed' : ''}${l.dibujo ? ' es-dibujo' : ''}"><div class="mx-zoom"><button data-zoom="-1" aria-label="Alejar">−</button><b>${Math.round(z * 100)}%</b><button data-zoom="1" aria-label="Acercar">＋</button><button data-zoom="0">${tr2('Ajustar', 'Fit')}</button></div><div class="mx-stage-in" style="--z:${z}"><img src="${l.img}" alt="" draggable="false">${pins}</div></div>
+      <div class="mx-pts-wrap"><table class="mx-table mx-pts"><thead><tr><th>Ref.</th><th>${tr2('N.º de pieza', 'Part no.')}</th><th>${tr2('Designación', 'Designation')}</th><th>${tr2('N.º original', 'Original no.')}</th><th>${tr2('Nota', 'Note')}</th></tr></thead><tbody>${rows || `<tr><td colspan="5" class="mx-empty">${tr2('Todavía no hay puntos. Pulsa «Editar lámina» y toca la imagen.', 'No points yet. Press “Edit sheet” and tap the image.')}</td></tr>`}</tbody></table></div>`;
+  }
+  function tabla() {
+    migas(); const L = $('#epcList'); const bd = document.querySelector('#epcOverlay .mx-body'); bd && bd.classList.toggle('is-desp', !!estado.lam);
+    if (estado.lam) return vistaLam();
+    if (estado.vendidas && estado.vin) { const g = mem.get()[estado.vin.chasis] || {}; const ps = (g.piezas || []).map(r => PRODUCTS_BY_REF[r]).filter(Boolean);
+      L.innerHTML = `<div class="mx-th">${tr2('Piezas vendidas a este chasis', 'Parts sold to this chassis')}</div>` + filas(ps, true); lamina(ps.map((p, i) => ({ key: p.ref, kind: 'ref', img: p.img, n: i + 1, on: p.ref === estado.ref })), tr2('Piezas vendidas a este chasis', 'Parts sold to this chassis')); return; }
+    if (estado.pn) { const q = norm(estado.pn); const refs = new Set(indiceOE().get(q) || []);
+      for (const p of window.__etProducts()) if (norm(p.ref) === q || norm(p.sku) === q || norm(p.gtin) === q) refs.add(p.ref);
+      const ps = [...refs].map(r => PRODUCTS_BY_REF[r]).filter(Boolean);
+      L.innerHTML = `<div class="mx-th">${tr2('Dónde se usa / coincidencias', 'Where used / matches')} · ${ps.length}</div>` + filas(ps, true); lamina(ps.map((p, i) => ({ key: p.ref, kind: 'ref', img: p.img, n: i + 1, on: p.ref === estado.ref })), tr2('N.º de pieza', 'Part no.') + ' ' + estado.pn); return; }
+    if (!estado.sis) { const cnt = {}; for (const p of base()) { const s = sistemaDe(p); cnt[s] = (cnt[s] || 0) + 1; }
+      L.innerHTML = `<div class="mx-th">${tr2('Grupos principales', 'Main groups')}</div><table class="mx-table mx-groups"><thead><tr><th>${tr2('Grupo', 'Group')}</th><th>${tr2('Descripción', 'Description')}</th><th>${tr2('Piezas', 'Parts')}</th></tr></thead><tbody>` +
+        SIS.filter(s => cnt[s[0]]).map(s => `<tr data-sis="${esc(s[0])}"><td class="mono b">${num(s[0])}</td><td>${esc(tr2(s[0], s[1]))}</td><td class="mono">${cnt[s[0]].toLocaleString()}</td></tr>`).join('') + '</tbody></table>';
+      const B = base(); lamina(SIS.filter(s => cnt[s[0]]).map(s => ({ key: s[0], kind: 'sis', img: imgDe(B.filter(p => sistemaDe(p) === s[0]).slice(0, 40)), n: num(s[0]) })), (estado.marca || tr2('Todas las marcas', 'All makes')) + ' · ' + tr2('Grupos principales', 'Main groups')); return; }
     const enSis = base().filter(p => sistemaDe(p) === estado.sis);
-    if (!estado.sub) {
-      const g = new Map(); for (const p of enSis) { const k = subgrupo(p); g.set(k, (g.get(k) || 0) + 1); }
-      const arr = [...g].filter(([k]) => !f || k.toLowerCase().includes(f)).sort((a, b) => b[1] - a[1]);
-      L.innerHTML = `<div class="et-epc-h">${arr.length} ${tr2('tipos de pieza', 'part types')}</div><div class="et-epc-subs">` + arr.slice(0, estado.lim).map(([k, n]) => `<button data-sub="${esc(k)}"><span>${esc(k)}</span><small>${n}</small></button>`).join('') + '</div>' + (arr.length > estado.lim ? `<button class="et-more" data-more>${tr2('Ver más', 'Show more')}</button>` : '');
-      return;
-    }
-    const ps = enSis.filter(p => subgrupo(p) === estado.sub).filter(p => !f || (p.title + ' ' + p.ref + ' ' + (p.refsList || []).join(' ')).toLowerCase().includes(f));
-    ps.sort((a, b) => stockDe(b.ref).n - stockDe(a.ref).n);
-    L.innerHTML = `<div class="et-epc-h">${ps.length} ${tr2('piezas', 'parts')}</div>` + piezasHTML(ps.slice(0, estado.lim)) + (ps.length > estado.lim ? `<button class="et-more" data-more>${tr2('Ver más', 'Show more')}</button>` : '');
+    if (!estado.sub) { const g = new Map(); for (const p of enSis) { const k = subgrupo(p); g.set(k, (g.get(k) || 0) + 1); }
+      const arr = [...g].sort((a, b) => b[1] - a[1]);
+      L.innerHTML = `<div class="mx-th">${tr2('Subgrupos', 'Sub-groups')} · ${arr.length}</div>` + lamStrip() + `<table class="mx-table mx-groups"><thead><tr><th>${tr2('Subgrupo', 'Sub-group')}</th><th>${tr2('Descripción', 'Description')}</th><th>${tr2('Piezas', 'Parts')}</th></tr></thead><tbody>` +
+        arr.slice(0, 120).map(([k, n], i) => `<tr data-sub="${esc(k)}"><td class="mono b">${num(estado.sis)}.${String(i + 1).padStart(2, '0')}</td><td>${esc(k)}</td><td class="mono">${n}</td></tr>`).join('') + '</tbody></table>';
+      lamina(arr.map(([k], i) => ({ key: k, kind: 'sub', img: imgDe(enSis.filter(p => subgrupo(p) === k).slice(0, 30)), n: num(estado.sis) + '.' + String(i + 1).padStart(2, '0') })), tr2('Grupo', 'Group') + ' ' + num(estado.sis) + ' · ' + tr2(estado.sis, SIS_EN[estado.sis] || estado.sis)); return; }
+    let ps = enSis.filter(p => subgrupo(p) === estado.sub).sort((a, b) => stockDe(b.ref).n - stockDe(a.ref).n);
+    if (estado.solo) ps = ps.filter(p => stockDe(p.ref).n > 0 || equivalentes(p).some(r => stockDe(r).n > 0));
+    L.innerHTML = `<div class="mx-th">${tr2('Lista de piezas', 'Parts list')} · ${ps.length}<label class="mx-solo"><input type="checkbox" data-solo ${estado.solo ? 'checked' : ''}> ${tr2('Solo lo que tengo (o su equivalente)', 'Only what I have (or equivalent)')}</label></div>` + lamStrip() + filas(ps.slice(0, 300), false);
+    const pos = [...enSis.filter(p => subgrupo(p) === estado.sub).map(p => p.ref)]; lamina(ps.slice(0, 300).map((p, i) => ({ key: p.ref, kind: 'ref', img: p.img, n: i + 1, on: p.ref === estado.ref })), estado.sub + (estado.marca ? ' [' + estado.marca + ']' : ''));
   }
-  function piezasHTML(ps) {
-    return '<div class="et-epc-parts">' + ps.map(p => { const s = stockDe(p.ref); const oe = (p.refsList || [])[0] || p.oe || '';
-      return `<button class="et-part" data-ref="${esc(p.ref)}"><img loading="lazy" src="${esc(p.img)}" alt="" onerror="this.style.visibility='hidden'"><span class="t"><b>${esc(p.title)}</b><small>${esc(p.sku || p.ref)}${oe ? ' · OE ' + esc(String(oe).split(':').pop()) : ''}</small></span><span class="st ${s.n > 0 ? 'ok' : ''}">${s.n > 0 ? s.n + ' ' + tr2('disp.', 'in stock') : tr2('Sin stock', 'Out')}</span></button>`; }).join('') + '</div>';
-  }
-  function detalle() {
-    const p = PRODUCTS_BY_REF[estado.ref]; if (!p) { estado.ref = null; return lista(); }
-    const s = stockDe(p.ref), inv = (() => { try { return peekInv(p.ref); } catch (e) { return {}; } })();
-    const logged = typeof currentUser !== 'undefined' && currentUser; const verCosto = logged && typeof canSeeCost === 'function' && canSeeCost();
+  function lado() {
+    const S = $('#epcSide'); const tabs = `<div class="mx-tabs"><button data-tab="pieza" class="${estado.tab === 'pieza' ? 'is-on' : ''}">${tr2('En mi inventario', 'In my inventory')}</button><button data-tab="lista" class="${estado.tab === 'lista' ? 'is-on' : ''}">${tr2('Lista de pedido', 'Order list')} (${cesta.get().reduce((n, x) => n + x.q, 0)})</button></div>`;
+    if (estado.tab === 'lista') { const a = cesta.get();
+      S.innerHTML = tabs + (a.length ? `<div class="mx-cesta-list">${a.map(x => { const p = PRODUCTS_BY_REF[x.r]; if (!p) return ''; const s = stockDe(x.r); return `<div class="mx-ci"><div><b class="mono">${esc(p.sku || p.ref)}</b><span>${esc(p.title)}</span><small>${s.n} ${tr2('en stock', 'in stock')}${s.loc ? ' · ' + esc(s.loc) : ''}</small></div><input type="number" min="1" value="${x.q}" data-cq="${esc(x.r)}"><button data-cdel="${esc(x.r)}" aria-label="Quitar">✕</button></div>`; }).join('')}</div>
+        <div class="mx-cesta-act"><button class="et-btn et-btn--accent" data-tocart>${tr2('Pasar al carrito', 'Send to cart')}</button><button class="et-btn et-btn--ghost" data-copy>${tr2('Copiar lista', 'Copy list')}</button><button class="et-btn et-btn--ghost" data-vaciar>${tr2('Vaciar', 'Clear')}</button></div>` : `<p class="mx-empty">${tr2('La lista está vacía. Usa ＋ en la tabla para agregar piezas.', 'The list is empty. Use ＋ in the table.')}</p>`);
+      return; }
+    if (estado.lam && estado.edit && puedeEditar()) { const l = lamDe(estado.lam), pt = l && l.puntos.find(x => x.n === estado.pin);
+      if (!pt) { S.innerHTML = `<div class="mx-inv-empty"><b>${tr2('Editando lámina', 'Editing sheet')}</b><span>${tr2('Toca la imagen para poner un número nuevo, o toca un número existente para enlazarlo a una pieza de tu inventario.', 'Tap the image to add a number, or tap an existing number to link it.')}</span></div>`; return; }
+      const q = pt.ref && PRODUCTS_BY_REF[pt.ref];
+      S.innerHTML = `<div class="mx-sel"><small>${tr2('Punto', 'Point')} ${pt.n}</small><b>${q ? esc(q.sku || q.ref) + ' · ' + esc(q.title) : tr2('Sin enlazar todavía', 'Not linked yet')}</b></div>
+        <form class="mx-lamf" data-lambus><input id="lamQ" autocomplete="off" placeholder="${tr2('SKU, N.º original o nombre', 'SKU, original no. or name')}"><button>${tr2('Buscar', 'Search')}</button></form>
+        <div class="mx-inv-h sub">${tr2('Toca la pieza para enlazarla al punto', 'Tap the part to link it')} ${pt.n}</div>
+        <div class="mx-eq" id="lamRes">${resLam('')}</div>
+        <label class="mx-lamf-l">${tr2('Nota del punto', 'Point note')}<input data-pinnota maxlength="80" value="${esc(pt.nota || '')}" placeholder="${tr2('Ej: lleva 2 · lado izquierdo', 'E.g. qty 2 · left side')}"></label>
+        <div class="mx-cesta-act"><button class="et-btn et-btn--ghost" data-pinmov>${tr2('Mover punto', 'Move point')}</button><button class="et-btn et-btn--ghost" data-pindel>${tr2('Borrar punto', 'Delete point')}</button></div>`;
+      return; }
+    const p = estado.ref && PRODUCTS_BY_REF[estado.ref];
+    if (!p && estado.lam) { S.innerHTML = tabs + `<div class="mx-inv-empty mx-desp-hint"><b>${tr2('Toca un número del despiece', 'Tap a number on the drawing')}</b><span>${tr2('Aquí aparece la pieza de tu inventario: stock, ubicación, código Zebra y precio.', 'Your inventory item shows here: stock, location, Zebra code and price.')}</span></div>`; return; }
+    if (!p) { S.innerHTML = tabs + `<div class="mx-inv-empty"><b>${tr2('Selecciona una pieza', 'Select a part')}</b><span>${tr2('Elige un grupo y un tipo de pieza, y toca una pieza de la lista. Aquí aparece lo que tienes en tu inventario.', 'Choose a group and a part type, then tap a part. What you have in stock shows here.')}</span></div>`; return; }
+    const logged = typeof currentUser !== 'undefined' && currentUser, verCosto = logged && typeof canSeeCost === 'function' && canSeeCost();
     const oes = [...new Set([...(p.refsList || []), p.oe].filter(Boolean))];
-    const eq = equivalentes(p).map(r => PRODUCTS_BY_REF[r]).filter(Boolean).map(q => ({ q, s: stockDe(q.ref) })).sort((a, b) => b.s.n - a.s.n).slice(0, 12);
-    const g = estado.vin ? (mem.get()[estado.vin.chasis] || {}) : {};
-    $('#epcList').innerHTML = `<article class="et-detail">
-      <div class="et-detail-img"><img src="${esc(p.img)}" alt="${esc(p.title)}" onerror="this.style.visibility='hidden'"></div>
-      <h3>${esc(p.title)}</h3><div class="et-detail-meta"><span>SKU <b>${esc(p.sku || p.ref)}</b></span><span>${esc(p.brand)}</span><span>${esc(tr2(sistemaDe(p), SIS_EN[sistemaDe(p)] || ''))}</span></div>
-      <div class="et-stock ${s.n > 0 ? 'ok' : ''}"><div><small>${tr2('En inventario', 'In stock')}</small><b>${s.n}</b></div><div><small>${tr2('Ubicación', 'Location')}</small><b>${esc(s.loc || tr2('Sin ubicación', 'No location'))}</b></div>
-        ${logged && Number(inv.price) ? `<div><small>${tr2('Precio', 'Price')}</small><b>RD$ ${Number(inv.price).toLocaleString()}</b></div>` : ''}${verCosto && Number(inv.cost) ? `<div><small>${tr2('Costo', 'Cost')}</small><b>RD$ ${Number(inv.cost).toLocaleString()}</b></div>` : ''}</div>
-      ${oes.length ? `<h4>${tr2('Números originales (OE)', 'Original numbers (OE)')}</h4><div class="et-oe">${oes.map(o => `<button data-oe="${esc(String(o).split(':').pop())}">${esc(o)}</button>`).join('')}</div>` : ''}
-      ${p.gtin ? `<h4>GTIN</h4><p class="et-mono">${esc(p.gtin)}</p>` : ''}
-      ${eq.length ? `<h4>${tr2('Equivalentes en tu catálogo e inventario', 'Equivalents in your catalog & inventory')}</h4>${piezasHTML(eq.map(e => e.q))}` : ''}
-      ${p.applications ? `<h4>${tr2('Aplicación', 'Application')}</h4><p class="et-apps">${esc(p.applications).split(' | ').slice(0, 12).join('<br>')}</p>` : ''}
-      <div class="et-detail-actions"><button class="et-btn et-btn--accent" data-cart="${esc(p.ref)}">${tr2('Agregar al carrito', 'Add to cart')}</button>
-        <button class="et-btn et-btn--ghost" data-modal="${esc(p.ref)}">${tr2('Ficha completa', 'Full sheet')}</button>
-        ${logged ? `<button class="et-btn et-btn--ghost" data-inv="${esc(p.ref)}">${tr2('Ficha de inventario', 'Inventory sheet')}</button>` : ''}</div>
-      ${estado.vin ? `<p class="et-note">${(g.piezas || []).includes(p.ref) ? tr2('✔ Ya se le vendió esta pieza a este chasis.', '✔ Already sold to this chassis.') : tr2('Al agregarla al carrito queda anotada para este chasis.', 'Adding it to the cart records it for this chassis.')}</p>` : ''}
-    </article>`;
+    const enInv = r => { const row = typeof inventoryState !== 'undefined' ? inventoryState[r] : null; return !!(row && (Number(row.stock) > 0 || row.location || (row.extraLocations || []).length || row.product)); };
+    const cand = [p.ref, ...equivalentes(p)].filter((r, i, a) => a.indexOf(r) === i);
+    const mios = cand.filter(enInv).map(r => ({ q: PRODUCTS_BY_REF[r], s: stockDe(r), inv: peekInv(r) })).filter(x => x.q).sort((a, b) => b.s.n - a.s.n);
+    const otros = cand.filter(r => r !== p.ref && !enInv(r)).map(r => PRODUCTS_BY_REF[r]).filter(Boolean).slice(0, 8);
+    const zebra = r => { try { return typeof getInternalCode === 'function' ? (getInternalCode(r) || '') : ''; } catch (e) { return ''; } };
+    const tarjeta = ({ q, s, inv }) => `<article class="mx-ia ${s.n > 0 ? 'ok' : 'cero'}">
+        <div class="mx-ia-img"><img src="${esc(q.img)}" alt="" onerror="this.style.visibility='hidden'"></div>
+        <div class="mx-ia-body"><div class="mx-ia-top"><b class="mx-ia-sku">${esc(q.sku || q.ref)}</b>${zebra(q.ref) ? `<span class="mx-ia-z">Zebra ${esc(zebra(q.ref))}</span>` : ''}${q.ref === p.ref ? `<span class="mx-ia-tag">${tr2('Misma pieza', 'Same part')}</span>` : `<span class="mx-ia-tag eq">${tr2('Equivalente', 'Equivalent')}</span>`}</div>
+          <div class="mx-ia-t">${esc(q.title)}</div><div class="mx-ia-m">${esc(q.brand)} · OE ${esc(oe1(q) || '—')}</div></div>
+        <div class="mx-ia-nums"><div class="mx-ia-st"><small>Stock</small><b>${s.n}</b></div><div class="mx-ia-loc"><small>${tr2('Ubicación', 'Location')}</small><b>${esc(s.loc || tr2('Sin ubicación', 'No location'))}</b></div>
+          ${logged && Number(inv.price) ? `<div><small>${tr2('Precio', 'Price')}</small><b>RD$ ${Number(inv.price).toLocaleString()}</b></div>` : ''}${verCosto && Number(inv.cost) ? `<div><small>${tr2('Costo', 'Cost')}</small><b>RD$ ${Number(inv.cost).toLocaleString()}</b></div>` : ''}</div>
+        <div class="mx-ia-act"><button class="et-btn et-btn--accent" data-cart1="${esc(q.ref)}">${tr2('Al carrito', 'To cart')}</button><button class="et-btn et-btn--ghost" data-add="${esc(q.ref)}">${tr2('A la lista', 'To list')}</button>${logged ? `<button class="et-btn et-btn--ghost" data-inv="${esc(q.ref)}">${tr2('Ficha de inventario', 'Inventory sheet')}</button>` : ''}</div></article>`;
+    S.innerHTML = tabs + `<div class="mx-sel"><small>${tr2('Pieza seleccionada', 'Selected part')}</small><b>${esc(p.sku || p.ref)} · ${esc(p.title)}</b>${oes.length ? `<div class="mx-oe">${oes.slice(0, 6).map(o => `<button data-oe="${esc(String(o).split(':').pop())}">${esc(o)}</button>`).join('')}</div>` : ''}</div>
+      <div class="mx-inv-h">${tr2('En tu inventario', 'In your inventory')} <span>${mios.length}</span></div>
+      ${mios.length ? mios.map(tarjeta).join('') : `<div class="mx-inv-none"><b>${tr2('No lo tienes en inventario', 'Not in your inventory')}</b><span>${tr2('Ni esta pieza ni sus equivalentes están registrados en tu almacén.', 'Neither this part nor its equivalents are in your warehouse.')}</span><button class="et-btn et-btn--accent" data-add="${esc(p.ref)}">${tr2('Agregar a la lista de pedido', 'Add to order list')}</button></div>`}
+      ${otros.length ? `<div class="mx-inv-h sub">${tr2('Equivalentes del catálogo (no los tienes)', 'Catalog equivalents (not in stock)')}</div><div class="mx-eq">${otros.map(q => `<button data-ref="${esc(q.ref)}"><b>${esc(q.sku || q.ref)}</b><span>${esc(q.title)} · ${esc(q.brand)}</span><small>0</small></button>`).join('')}</div>` : ''}`;
   }
-  function usado(ref) { if (!estado.vin) return; const m = mem.get(); const g = m[estado.vin.chasis] || (m[estado.vin.chasis] = { marca: estado.marca }); g.piezas = [...new Set([ref, ...(g.piezas || [])])].slice(0, 300); g.t = Date.now(); mem.set(m); }
-  function ir(cambios) { Object.assign(estado, cambios, { lim: 60 }); if (!('filtro' in cambios)) { estado.filtro = ''; $('#epcFind').value = ''; } lista();
+  function buscarLam(t) {
+    const l = lamDe(estado.lam); t = String(t || '').trim();
+    if (!t) { return base().filter(p => l && sistemaDe(p) === l.sis && (!l.sub || subgrupo(p) === l.sub)).sort((a, b) => stockDe(b.ref).n - stockDe(a.ref).n).slice(0, 12); }
+    const q = norm(t), out = new Set(indiceOE().get(q) || []);
+    for (const p of window.__etProducts()) { if (out.size >= 40) break; if (norm(p.ref) === q || norm(p.sku) === q || norm(p.gtin) === q) out.add(p.ref); }
+    const tl = t.toLowerCase(); if (out.size < 12) for (const p of base()) { if (out.size >= 24) break; if ((p.title || '').toLowerCase().includes(tl) || norm(p.sku).includes(q)) out.add(p.ref); }
+    return [...out].map(r => PRODUCTS_BY_REF[r]).filter(Boolean).sort((a, b) => stockDe(b.ref).n - stockDe(a.ref).n).slice(0, 15);
+  }
+  function resLam(t) { const ps = buscarLam(t); if (!ps.length) return `<p class="mx-empty">${tr2('Sin resultados.', 'No results.')}</p>`;
+    return ps.map(q => { const s = stockDe(q.ref); return `<button data-link="${esc(q.ref)}"><b>${esc(q.sku || q.ref)}</b><span>${esc(q.title)} · OE ${esc(oe1(q) || '—')}</span><small class="${s.n > 0 ? 'ok' : ''}">${s.n}</small></button>`; }).join(''); }
+  // Mejora la imagen: recorta el borde blanco y, si es un dibujo de líneas, lo agranda y lo deja nítido
+  async function procesarImg(file) {
+    const url = URL.createObjectURL(file), im = new Image();
+    await new Promise((ok, no) => { im.onload = ok; im.onerror = no; im.src = url; });
+    const sw = im.naturalWidth, sh = im.naturalHeight; let c = document.createElement('canvas'); c.width = sw; c.height = sh;
+    let g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, sw, sh); g.drawImage(im, 0, 0); URL.revokeObjectURL(url);
+    let d = g.getImageData(0, 0, sw, sh).data, x0 = sw, y0 = sh, x1 = -1, y1 = -1, blancos = 0, n = 0;
+    for (let y = 0; y < sh; y++) for (let x = 0; x < sw; x++) { const i = (y * sw + x) * 4, l = (d[i] + d[i + 1] + d[i + 2]) / 3; n++; if (l > 225) blancos++; else { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; } }
+    if (x1 < x0) { x0 = 0; y0 = 0; x1 = sw - 1; y1 = sh - 1; }
+    const m = Math.round(Math.max(sw, sh) * 0.02); x0 = Math.max(0, x0 - m); y0 = Math.max(0, y0 - m); x1 = Math.min(sw - 1, x1 + m); y1 = Math.min(sh - 1, y1 + m);
+    const w = x1 - x0 + 1, h = y1 - y0 + 1, lineas = blancos / n > 0.55;
+    // tamaño final: dibujos de líneas hasta 2600 px de lado; fotos hasta 1800
+    const meta = lineas ? 2600 : 1800, k = Math.min(meta / Math.max(w, h), lineas ? 8 : 1);
+    let src = document.createElement('canvas'); src.width = w; src.height = h; src.getContext('2d').drawImage(c, x0, y0, w, h, 0, 0, w, h);
+    // agrandar por pasos de 2x para que quede suave
+    let cw = w, ch = h; const fw = Math.round(w * k), fh = Math.round(h * k);
+    while (cw * 2 <= fw) { const t = document.createElement('canvas'); t.width = cw * 2; t.height = ch * 2; const tg = t.getContext('2d'); tg.imageSmoothingEnabled = true; tg.imageSmoothingQuality = 'high'; tg.drawImage(src, 0, 0, t.width, t.height); src = t; cw = t.width; ch = t.height; }
+    const out = document.createElement('canvas'); out.width = fw; out.height = fh; const og = out.getContext('2d'); og.imageSmoothingEnabled = true; og.imageSmoothingQuality = 'high'; og.fillStyle = '#fff'; og.fillRect(0, 0, fw, fh); og.drawImage(src, 0, 0, fw, fh);
+    if (lineas) { // niveles: fondo blanco puro y líneas negras definidas
+      const id = og.getImageData(0, 0, fw, fh), q = id.data;
+      for (let i = 0; i < q.length; i += 4) { const l = (q[i] * 0.3 + q[i + 1] * 0.59 + q[i + 2] * 0.11); let v = (l - 95) / (215 - 95); v = v < 0 ? 0 : v > 1 ? 1 : v; v = v * v * (3 - 2 * v); const o = Math.round(v * 255); q[i] = q[i + 1] = q[i + 2] = o; }
+      og.putImageData(id, 0, 0); }
+    let img = out.toDataURL('image/webp', 0.93); if (!img.startsWith('data:image/webp')) img = out.toDataURL(lineas ? 'image/png' : 'image/jpeg', 0.9);
+    return { img, lineas, fuente: { x0, y0, w, h, sw, sh } };
+  }
+  async function nuevaLam(file) {
+    let r; try { r = await procesarImg(file); } catch (e) { typeof showToast === 'function' && showToast(tr2('No se pudo leer la imagen.', 'Could not read the image.')); return; }
+    const l = { id: 'L' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), titulo: estado.sub || tr2(estado.sis, SIS_EN[estado.sis] || estado.sis), sis: estado.sis, sub: estado.sub || '', marca: estado.marca || '', img: r.img, dibujo: r.lineas, fuente: r.fuente, puntos: [], creado: Date.now() };
+    LAMS.push(l); await guardarLam(l); ir({ lam: l.id, sis: l.sis, sub: estado.sub }); estado.edit = true; estado.pin = null; tabla(); lado();
+    return l.id;
+  }
+  // Clics propios de las láminas; devuelve true si los manejó
+  function clicLam(e) {
+    const t = e.target, b = t.closest('button'), d = b ? b.dataset : {};
+    if (d.lamid) { const l = lamDe(d.lamid); if (l) ir({ sis: l.sis, sub: l.sub || null, lam: l.id }); return true; }
+    if (b && 'lamnew' in d) { $('#epcLamFile').value = ''; $('#epcLamFile').click(); return true; }
+    if (!estado.lam) return false;
+    const l = lamDe(estado.lam); if (!l) return false;
+    if (b && d.zoom !== undefined) { const v = Number(d.zoom); estado.zoom = v === 0 ? 1 : Math.max(1, Math.min(3, (estado.zoom || 1) + v * 0.5)); tabla(); return true; }
+    if (b && 'lamarbol' in d) { const bd = document.querySelector('#epcOverlay .mx-body'); bd && bd.classList.toggle('ver-arbol'); return true; }
+    if (b && 'lamed' in d) { estado.edit = true; estado.pin = null; tabla(); lado(); return true; }
+    if (b && 'lamfin' in d) { estado.edit = false; estado.pin = null; estado.mover = false; tabla(); lado(); return true; }
+    if (b && 'lamdel' in d) { if (!b.classList.contains('is-ask')) { b.classList.add('is-ask'); b.textContent = tr2('¿Seguro? Toca otra vez', 'Sure? Tap again'); return true; }
+      LAMS = LAMS.filter(x => x.id !== l.id); borrarLam(l.id); ir({ lam: null }); return true; }
+    if (b && d.link) { const pt = l.puntos.find(x => x.n === estado.pin); if (pt) { pt.ref = d.link; guardarLam(l); estado.ref = d.link; tabla(); lado(); arbol(); } return true; }
+    if (b && 'pindel' in d) { l.puntos = l.puntos.filter(x => x.n !== estado.pin); estado.pin = null; guardarLam(l); tabla(); lado(); arbol(); return true; }
+    if (b && 'pinmov' in d) { estado.mover = true; typeof showToast === 'function' && showToast(tr2('Toca en la imagen el nuevo lugar del punto.', 'Tap the new spot on the image.')); return true; }
+    const ed = estado.edit && puedeEditar();
+    const pin = t.closest('.mx-pin'), row = t.closest('tr[data-pinrow]');
+    if (pin || row) { const n = Number((pin || row).dataset.pin || (pin || row).dataset.pinrow); const pt = l.puntos.find(x => x.n === n); estado.pin = n; estado.mover = false;
+      if (ed) { if (pt && pt.ref) estado.ref = pt.ref; tabla(); lado(); return true; }
+      if (pt && pt.ref) { seleccionar(pt.ref); return true; }
+      tabla(); return true; }
+    const st = t.closest('.mx-stage-in');
+    if (ed && st) { const r = st.querySelector('img').getBoundingClientRect(); const x = +(((e.clientX - r.left) / r.width) * 100).toFixed(2), y = +(((e.clientY - r.top) / r.height) * 100).toFixed(2);
+      if (x < 0 || x > 100 || y < 0 || y > 100) return true;
+      if (estado.mover && estado.pin) { const pt = l.puntos.find(q => q.n === estado.pin); if (pt) { pt.x = x; pt.y = y; } estado.mover = false; }
+      else { const n = l.puntos.reduce((m, q) => Math.max(m, q.n), 0) + 1; l.puntos.push({ n, x, y, ref: '', nota: '' }); estado.pin = n; }
+      guardarLam(l); tabla(); lado(); arbol(); setTimeout(() => { const i = $('#lamQ'); i && i.focus({ preventScroll: true }); }, 30); return true; }
+    return false;
+  }
+  function agregar(ref, q) { const a = cesta.get(); const x = a.find(y => y.r === ref); if (x) x.q += q; else a.push({ r: ref, q }); cesta.set(a);
+    if (estado.vin) { const m = mem.get(); const g = m[estado.vin.chasis] || (m[estado.vin.chasis] = { marca: estado.marca }); g.piezas = [...new Set([ref, ...(g.piezas || [])])].slice(0, 300); mem.set(m); }
+    typeof showToast === 'function' && showToast(tr2('Agregado a la lista de pedido.', 'Added to the order list.')); vehiculo(); lado(); }
+  function seleccionar(ref) {
+    estado.ref = ref; estado.tab = 'pieza';
+    document.querySelectorAll('#epcOverlay tr.is-on, #epcOverlay .mx-lam-it.is-on, #epcOverlay .mx-pin.is-on').forEach(x => x.classList.remove('is-on'));
+    document.querySelectorAll(`#epcList .mx-pin[data-lam="${CSS.escape(ref)}"]`).forEach(x => x.classList.add('is-on'));
+    const tr = document.querySelector(`#epcList tr[data-ref="${CSS.escape(ref)}"]`), it = document.querySelector(`#epcLamina [data-lam="${CSS.escape(ref)}"]`);
+    if (tr) { tr.classList.add('is-on'); const w = tr.closest('.mx-pts-wrap'); if (w) w.scrollTop = tr.offsetTop - w.clientHeight / 2; else tr.scrollIntoView({ block: 'nearest' }); } if (it) { it.classList.add('is-on'); it.scrollIntoView({ block: 'nearest' }); }
+    lado();
+  }
+  function todo() { vehiculo(); arbol(); tabla(); lado(); }
+  function ir(c) { Object.assign(estado, { pn: '', vendidas: false, lam: null, edit: false, pin: null, mover: false }, c); if ('sis' in c) estado.lim = 40; todo();
     if (visor) { if (estado.sis) visor.enfocar(estado.sis); else visor.vistaGeneral(); } $('#epcList').scrollTop = 0; }
-  function identificar(txt) {
-    const v = leerVIN(txt); if (!v.chasis) { estado.vin = null; ficha(); return; }
-    const g = mem.get()[v.chasis]; estado.vin = v; estado.marca = v.marca || (g && g.marca) || estado.marca || null;
-    ficha(); ir({ sis: null, sub: null, ref: null });
-    if (g && (g.piezas || []).length) { $('#epcList').insertAdjacentHTML('afterbegin', `<div class="et-epc-h">${tr2('Piezas que ya se le vendieron a este chasis', 'Parts already sold to this chassis')}</div>` + piezasHTML(g.piezas.map(r => PRODUCTS_BY_REF[r]).filter(Boolean).slice(0, 8))); }
-  }
+  function identificar(txt) { const v = leerVIN(txt); if (!v.chasis) { estado.vin = null; return ir({}); }
+    const g = mem.get()[v.chasis]; estado.vin = v; estado.marca = v.marca || (g && g.marca) || estado.marca || null; ir({ sis: null, sub: null, ref: null }); }
   async function abrir(vin, sis) {
     const o = ov(); o.hidden = false; document.body.classList.add('et-noscroll'); requestAnimationFrame(() => o.classList.add('is-open'));
-    if (!visor) visor = montarCamion($('#epc3d'), { modo: 'epc', alSeleccionar: s => ir({ sis: s, sub: null, ref: null }), alPasar: tip($('#epcTip')) });
-    if (vin) { $('#epcVin').value = norm(vin); identificar(vin); } else { ficha(); }
-    ir({ sis: sis || null, sub: null, ref: null });
+    cesta.set(cesta.get());
+    try { LAMS = await cargarLams(); } catch (e) { LAMS = []; }
+    if (vin) { $('#epcVin').value = norm(vin); identificar(vin); }
+    ir({ sis: sis || null, sub: null });
     if (!vin) setTimeout(() => $('#epcVin').focus(), 200);
   }
   function cerrar() { const o = ov(); o.classList.remove('is-open'); document.body.classList.remove('et-noscroll'); setTimeout(() => { o.hidden = true; }, 250); }
   function iniciar() {
     $('#epcVinForm').addEventListener('submit', e => { e.preventDefault(); identificar($('#epcVin').value); });
-    let tm; $('#epcFind').addEventListener('input', e => { clearTimeout(tm); tm = setTimeout(() => { estado.filtro = e.target.value; estado.lim = 60; lista(); }, 160); });
-    
+    $('#epcPnForm').addEventListener('submit', e => { e.preventDefault(); const v = $('#epcPn').value.trim(); if (v) { estado.pn = v; estado.vendidas = false; tabla(); } });
+    $('#epcCestaBtn').addEventListener('click', () => { estado.tab = 'lista'; lado(); });
+    const TK = 'et_epc_tema', tema = t => { ov().classList.toggle('mx-oscuro', t !== 'claro'); const b = $('#epcTema'); if (b) b.textContent = t === 'claro' ? '☾' : '☀'; };
+    let tm0; try { tm0 = localStorage.getItem(TK) || 'oscuro'; } catch (e) { tm0 = 'oscuro'; } tema(tm0);
+    const tb = document.createElement('button'); tb.id = 'epcTema'; tb.type = 'button'; tb.className = 'mx-tema'; tb.title = tr2('Modo claro / oscuro', 'Light / dark mode'); $('#epcCestaBtn').before(tb); tema(tm0);
+    tb.addEventListener('click', () => { const t = ov().classList.contains('mx-oscuro') ? 'claro' : 'oscuro'; try { localStorage.setItem(TK, t); } catch (e) {} tema(t); });
+    const fi = document.createElement('input'); fi.type = 'file'; fi.accept = 'image/*'; fi.id = 'epcLamFile'; fi.hidden = true; ov().appendChild(fi);
+    fi.addEventListener('change', () => { if (fi.files[0]) nuevaLam(fi.files[0]); });
+    let tl; ov().addEventListener('input', e => { if (e.target.id === 'lamQ') { clearTimeout(tl); tl = setTimeout(() => { $('#lamRes').innerHTML = resLam(e.target.value); }, 160); } });
+    ov().addEventListener('submit', e => { if (e.target.matches('[data-lambus]')) { e.preventDefault(); $('#lamRes').innerHTML = resLam($('#lamQ').value); } });
+    let tm; $('#epcFind').addEventListener('input', e => { clearTimeout(tm); tm = setTimeout(() => { estado.filtro = e.target.value; arbol(); }, 140); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape' && !ov().hidden) cerrar(); });
+    ov().addEventListener('mouseover', e => { const t = e.target.closest('tr[data-ref], tr[data-sis], tr[data-sub], .mx-lam-it, .mx-pin'); document.querySelectorAll('#epcOverlay .is-hl').forEach(x => x.classList.remove('is-hl')); if (!t) return;
+      const k = t.dataset.lam || t.dataset.ref || t.dataset.sis || t.dataset.sub; if (!k) return; const q = CSS.escape(k);
+      document.querySelectorAll(`#epcOverlay [data-lam="${q}"], #epcOverlay tr[data-ref="${q}"], #epcOverlay tr[data-sis="${q}"], #epcOverlay tr[data-sub="${q}"]`).forEach(x => x.classList.add('is-hl')); });
+    ov().addEventListener('change', e => { const l = estado.lam && lamDe(estado.lam);
+      if (l && e.target.matches('[data-lamtit]')) { l.titulo = e.target.value.trim().slice(0, 80) || l.titulo; guardarLam(l); migas(); return arbol(); }
+      if (l && e.target.matches('[data-pinnota]')) { const pt = l.puntos.find(x => x.n === estado.pin); if (pt) { pt.nota = e.target.value.trim().slice(0, 80); guardarLam(l); tabla(); } return; }
+      if (e.target.matches('[data-solo]')) { estado.solo = e.target.checked; return tabla(); } const i = e.target.closest('[data-cq]'); if (i) { const a = cesta.get(); const x = a.find(y => y.r === i.dataset.cq); if (x) { x.q = Math.max(1, parseInt(i.value) || 1); cesta.set(a); lado(); } } });
     ov().addEventListener('click', e => {
-      const b = e.target.closest('button'); if (!b) return; const d = b.dataset;
-      if (d.marca) { estado.marca = d.marca; if (estado.vin) { const m = mem.get(); (m[estado.vin.chasis] = m[estado.vin.chasis] || {}).marca = d.marca; mem.set(m); } ficha(); ir({ sis: estado.sis, sub: estado.sub, ref: null }); }
-      else if (d.sis) ir({ sis: d.sis, sub: null, ref: null });
-      else if (d.sub) ir({ sub: d.sub, ref: null });
-      else if (d.ref) { estado.ref = d.ref; estado.filtro = ''; $('#epcFind').value = ''; lista(); $('#epcList').scrollTop = 0; const p = PRODUCTS_BY_REF[d.ref]; if (p && visor) visor.enfocar(sistemaDe(p)); }
-      else if (d.oe) { estado.filtro = d.oe; $('#epcFind').value = d.oe; estado.ref = null; lista(); }
-      else if (d.more !== undefined) { estado.lim += 60; lista(); }
-      else if (d.go) ir(d.go === 'sis' ? { sis: null, sub: null, ref: null } : d.go === 'sub' ? { sub: null, ref: null } : { ref: null });
-      else if (d.cart) { usado(d.cart); addToCart(d.cart); }
-      else if (d.modal) openProductModal(d.modal);
-      else if (d.inv) openArticleDetail(d.inv);
-      else if (b.id === 'epcGuardar' && estado.vin) { const m = mem.get(); const g = m[estado.vin.chasis] || (m[estado.vin.chasis] = {}); g.cliente = $('#epcCliente').value.trim().slice(0, 60); g.marca = estado.marca; mem.set(m); ficha(); typeof showToast === 'function' && showToast(tr2('Chasis guardado.', 'Chassis saved.')); }
+      if (clicLam(e)) return;
+      const tr = e.target.closest('tr[data-ref], tr[data-sis], tr[data-sub]'); const b = e.target.closest('button');
+      if (b) { const d = b.dataset;
+        if (d.lam) { if (d.kind === 'sis') return ir({ sis: d.lam, sub: null }); if (d.kind === 'sub') return ir({ sub: d.lam }); return seleccionar(d.lam); }
+        if ('marca' in d) { estado.marca = d.marca || null; if (estado.vin && d.marca) { const m = mem.get(); (m[estado.vin.chasis] = m[estado.vin.chasis] || {}).marca = d.marca; mem.set(m); } return ir({}); }
+        if (d.add) { const row = b.closest('tr'); const q = row ? Math.max(1, parseInt(row.querySelector('input').value) || 1) : 1; return agregar(d.add, q); }
+        if (d.sis) return ir({ sis: d.sis === estado.sis && !estado.sub ? null : d.sis, sub: null });
+        if (d.sub) return ir({ sub: d.sub });
+        if (d.more !== undefined) { estado.lim += 40; return arbol(); }
+        if (d.go) return ir(d.go === 'sis' ? { sis: null, sub: null } : { sub: null });
+        if (d.tab) { estado.tab = d.tab; return lado(); }
+        if (d.ref) { estado.ref = d.ref; estado.tab = 'pieza'; return lado(); }
+        if (d.oe) { estado.pn = d.oe; $('#epcPn').value = d.oe; return tabla(); }
+        if ('vendidas' in d) { estado.vendidas = true; estado.pn = ''; return tabla(); }
+        if (d.cdel) { cesta.set(cesta.get().filter(x => x.r !== d.cdel)); return lado(); }
+        if ('tocart' in d) { cesta.get().forEach(x => { for (let i = 0; i < x.q; i++) addToCart(x.r); }); return; }
+        if ('copy' in d) { const t = cesta.get().map(x => { const p = PRODUCTS_BY_REF[x.r]; return `${x.q} x ${p ? (p.sku || p.ref) + ' — ' + p.title : x.r}`; }).join('\n'); navigator.clipboard && navigator.clipboard.writeText((estado.vin ? 'Chasis ' + estado.vin.chasis + '\n' : '') + t); typeof showToast === 'function' && showToast(tr2('Lista copiada.', 'List copied.')); return; }
+        if ('vaciar' in d) { cesta.set([]); return lado(); }
+        if (d.cart1) { addToCart(d.cart1); return; }
+        if (d.modal) return openProductModal(d.modal);
+        if (d.inv) return openArticleDetail(d.inv);
+        if (b.id === 'epcGuardar' && estado.vin) { const m = mem.get(); const g = m[estado.vin.chasis] || (m[estado.vin.chasis] = {}); g.cliente = $('#epcCliente').value.trim().slice(0, 60); g.marca = estado.marca; mem.set(m); typeof showToast === 'function' && showToast(tr2('Chasis guardado.', 'Chassis saved.')); return vehiculo(); }
+        return;
+      }
+      if (tr && !e.target.closest('input')) { const d = tr.dataset;
+        if (d.sis) return ir({ sis: d.sis, sub: null });
+        if (d.sub) return ir({ sub: d.sub });
+        if (d.ref) return seleccionar(d.ref);
+      }
     });
   }
-  return { abrir, cerrar, iniciar, general: () => ir({ sis: null, sub: null, ref: null }) };
+  return { abrir, cerrar, iniciar, general: () => ir({ sis: null, sub: null }), _lam: { LDB, nueva: f => nuevaLam(f), async recargar() { LAMS = await cargarLams(); todo(); }, ir: id => { const l = lamDe(id); if (l) ir({ sis: l.sis, sub: l.sub || null, lam: id }); } } };
 })();
+
 window.EPC = EPC;
 
 function tip(el) {
