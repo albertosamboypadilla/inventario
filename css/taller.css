@@ -652,3 +652,15 @@ main .et-captcha.is-ok .box{background:var(--green);border-color:var(--green);bo
 .mx.mx-oscuro .mx-lam-btns button.is-ed{background:#1b74e8;color:#fff;}
 .mx-tema{width:40px;height:40px;border:1px solid rgba(120,200,255,.25);background:transparent;color:#ffd27a;font-size:18px;cursor:pointer;margin-right:8px;}
 .mx-tema:hover{background:rgba(120,200,255,.08);}
+
+/* ───── Despiece 3D ───── */
+.mx-stage.es-3d{position:relative;padding:0!important;display:flex;flex-direction:column;}
+.mx-3d{position:relative;flex:1;min-height:420px;background:radial-gradient(ellipse at 50% 35%,#102037 0%,#05080e 72%);overflow:hidden;}
+.mx-3d-canvas{display:block;width:100%!important;height:100%!important;cursor:grab;} .mx-3d-canvas:active{cursor:grabbing;}
+.mx-3d-capa{position:absolute;inset:0;pointer-events:none;} .mx-3d-capa .mx-pin{pointer-events:auto;transition:opacity .25s,transform .12s;}
+.mx-3d-lineas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;} .mx-3d-lineas line{stroke:#2fb4ff;stroke-opacity:.55;stroke-width:1.4;} .mx-3d-lineas circle{fill:#2fb4ff;}
+.mx-3d-ctl{display:flex;gap:6px;align-items:center;padding:8px 10px;background:#0b111b;border-bottom:1px solid #18243a;flex-wrap:wrap;}
+.mx-3d-ctl button{border:1px solid #22324a;background:#0f1724;color:#9fd8ff;padding:5px 12px;font:600 12px 'Segoe UI',sans-serif;cursor:pointer;}
+.mx-3d-ctl button.is-on{background:#1b74e8;border-color:#1b74e8;color:#fff;} .mx-3d-ctl span{margin-left:auto;color:#8597ad;font-size:12px;}
+.mx-pin3d{position:absolute;}
+.mx-lamc .mx-lamc3d{display:grid;place-items:center;height:84px;background:radial-gradient(#102037,#05080e);color:#22b8ff;font:800 22px Consolas,monospace;}

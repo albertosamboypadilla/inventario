@@ -103,16 +103,19 @@ const EPC = (() => {
         else { const j = await r.json().catch(() => ({})); typeof showToast === 'function' && showToast(tr2('No se pudo guardar la lámina en el servidor: ', 'Could not save the sheet on the server: ') + (j.error || r.status)); }
       } catch (e) { /* sin conexión: queda pendiente y se sube la próxima vez */ } }, ya ? 0 : 1200));
   }
+  // Despieces 3D propios que vienen con la página (se enlazan a las piezas desde «Editar lámina»)
+  const MODELOS3D = [{ id: 'M3d-freno-disco', modelo: 'freno-disco', titulo: 'Freno de disco neumático (3D)', sis: 'Sistema de freno', piezas: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14] }];
+  function conModelos(arr) { for (const d of MODELOS3D) if (!arr.some(l => l.id === d.id)) arr.push({ id: d.id, modelo: d.modelo, titulo: d.titulo, sis: d.sis, sub: '', marca: '', img: '', puntos: d.piezas.map(n => ({ n, x: 0, y: 0, ref: '', nota: '' })), creado: 1, mod: 0 }); return arr; }
   async function cargarLams() {
     let loc = []; try { loc = await LDB.todas(); } catch (e) {}
     const v = SRVL(); let srv = null;
     if (v) { try { if (typeof loadServerConfig === 'function') await loadServerConfig(); const r = await fetch(SRVL().url + '/api/laminas', { cache: 'no-store' }); if (r.ok) srv = (await r.json()).laminas || []; } catch (e) {} }
-    if (!srv) return loc;
+    if (!srv) return conModelos(loc);
     const base = SRVL().url, m = new Map(srv.map(l => [l.id, Object.assign(l, { img: base + '/api/laminas/' + encodeURIComponent(l.id) + '/img?m=' + l.mod, enServidor: true })]));
     for (const l of loc) { const x = m.get(l.id);
       if (!x) { if (l.enServidor && !l.pend) { LDB.quitar(l.id); continue; } m.set(l.id, l); l.pend = true; subir(l, true); }   // nueva de este equipo: se sube
       else if (l.pend && (l.mod || 0) > x.mod) { l.enServidor = true; m.set(l.id, Object.assign(l, { img: String(l.img).startsWith('data:') ? l.img : x.img })); subir(l, true); } }
-    return [...m.values()];
+    return conModelos([...m.values()]);
   }
   const guardarLam = l => { l.mod = Date.now(); l.pend = true; subir(l); return LDB.poner(l); };
   function borrarLam(id) { LDB.quitar(id); const v = SRVL(); if (v && v.token) fetch(v.url + '/api/laminas/' + encodeURIComponent(id), { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + v.token } }).catch(() => {}); }
@@ -178,7 +181,7 @@ const EPC = (() => {
     if (!estado.sis) return '';
     const ls = LAMS.filter(l => l.sis === estado.sis && (!estado.sub || !l.sub || l.sub === estado.sub));
     if (!ls.length && !puedeEditar()) return '';
-    return `<div class="mx-lams">${ls.map(l => `<button data-lamid="${esc(l.id)}" class="mx-lamc"><img src="${l.img}" alt=""><span>${esc(l.titulo)}</span><small>${l.puntos.length} ${tr2('puntos', 'points')}</small></button>`).join('')}${puedeEditar() ? `<button data-lamnew class="mx-lamc nueva"><b>＋</b><span>${tr2('Nueva lámina', 'New sheet')}</span><small>${tr2('Sube una foto o dibujo tuyo', 'Upload your own photo or drawing')}</small></button>` : ''}</div>`;
+    return `<div class="mx-lams">${ls.map(l => `<button data-lamid="${esc(l.id)}" class="mx-lamc">${l.modelo ? '<span class="mx-lamc3d">3D</span>' : `<img src="${l.img}" alt="">`}<span>${esc(l.titulo)}</span><small>${l.puntos.length} ${tr2('puntos', 'points')}</small></button>`).join('')}${puedeEditar() ? `<button data-lamnew class="mx-lamc nueva"><b>＋</b><span>${tr2('Nueva lámina', 'New sheet')}</span><small>${tr2('Sube una foto o dibujo tuyo', 'Upload your own photo or drawing')}</small></button>` : ''}</div>`;
   }
   function vistaLam() {
     const l = lamDe(estado.lam), L = $('#epcList');
@@ -192,12 +195,23 @@ const EPC = (() => {
       return `<tr data-pinrow="${pt.n}"${p ? ` data-ref="${esc(p.ref)}"` : ''} class="${(p && p.ref === estado.ref) || pt.n === estado.pin ? 'is-on' : ''}"><td class="mono r">${pt.n}</td><td class="mono b">${p ? esc(p.sku || p.ref) : '—'}</td><td class="d">${p ? esc(p.title) : ''}${pt.nota ? `<small class="mx-pnota">${esc(pt.nota)}</small>` : ''}</td><td class="mono">${p ? esc(oe1(p)) : ''}</td><td class="nota">${nota}</td></tr>`; }).join('');
     L.innerHTML = `<div class="mx-th mx-lam-h">${ed ? `<input class="mx-lam-tit" data-lamtit maxlength="80" value="${esc(l.titulo)}">` : `<span><button class="mx-lam-arbol" data-lamarbol>☰ ${tr2('Grupos', 'Groups')}</button> ▦ ${esc(l.titulo)} · ${pts.length} ${tr2('piezas', 'parts')}</span>`}${puedeEditar() ? `<span class="mx-lam-btns">${ed ? `<button data-lamfin class="is-ed">✓ ${tr2('Terminar', 'Done')}</button>` : `<button data-lamed>✎ ${tr2('Editar lámina', 'Edit sheet')}</button>`}<button data-lamdel>${tr2('Borrar lámina', 'Delete sheet')}</button></span>` : ''}</div>
       ${ed ? `<div class="mx-lam-tipbar">${tr2('Toca la imagen donde está cada pieza para poner el siguiente número. Toca un número para enlazarlo a tu inventario, moverlo o borrarlo.', 'Tap the image where each part is to drop the next number. Tap a number to link it, move it or delete it.')}</div>` : ''}
-      <div class="mx-stage${ed ? ' is-ed' : ''}${l.dibujo ? ' es-dibujo' : ''}"><div class="mx-zoom"><button data-zoom="-1" aria-label="Alejar">−</button><b>${Math.round(z * 100)}%</b><button data-zoom="1" aria-label="Acercar">＋</button><button data-zoom="0">${tr2('Ajustar', 'Fit')}</button></div><div class="mx-stage-in" style="--z:${z}"><img src="${l.img}" alt="" draggable="false">${pins}</div></div>
+      ${l.modelo ? `<div class="mx-stage es-3d"><div class="mx-3d-ctl"><button data-m3="desarmar" class="is-on">${tr2('Desarmado', 'Exploded')}</button><button data-m3="armar">${tr2('Armado', 'Assembled')}</button><button data-m3="vista">${tr2('Vista inicial', 'Reset view')}</button><span>${tr2('Arrastra para girar · rueda para acercar', 'Drag to rotate · wheel to zoom')}</span></div><div class="mx-3d" id="lam3d"></div></div>` : `<div class="mx-stage${ed ? ' is-ed' : ''}${l.dibujo ? ' es-dibujo' : ''}"><div class="mx-zoom"><button data-zoom="-1" aria-label="Alejar">−</button><b>${Math.round(z * 100)}%</b><button data-zoom="1" aria-label="Acercar">＋</button><button data-zoom="0">${tr2('Ajustar', 'Fit')}</button></div><div class="mx-stage-in" style="--z:${z}"><img src="${l.img}" alt="" draggable="false">${pins}</div></div>`}
       <div class="mx-pts-wrap"><table class="mx-table mx-pts"><thead><tr><th>Ref.</th><th>${tr2('N.º de pieza', 'Part no.')}</th><th>${tr2('Designación', 'Designation')}</th><th>${tr2('N.º original', 'Original no.')}</th><th>${tr2('Nota', 'Note')}</th></tr></thead><tbody>${rows || `<tr><td colspan="5" class="mx-empty">${tr2('Todavía no hay puntos. Pulsa «Editar lámina» y toca la imagen.', 'No points yet. Press “Edit sheet” and tap the image.')}</td></tr>`}</tbody></table></div>`;
   }
+  let v3d = null, v3dId = null;
+  async function montar3d(l) {
+    const el = $('#lam3d'); if (!el) return;
+    if (v3d) { try { v3d.destruir(); } catch (e) {} v3d = null; }
+    try { const m = await import('./modelos3d.js'); if (estado.lam !== l.id || !document.body.contains(el)) return;
+      v3d = m.montar(el, { modelo: l.modelo, sel: estado.pin, alElegir: n => { const pt = l.puntos.find(x => x.n === n); estado.pin = n; if (pt && pt.ref) seleccionar(pt.ref); else { v3d.sel(n); document.querySelectorAll('#epcList tr.is-on').forEach(x => x.classList.remove('is-on')); const tr = document.querySelector(`#epcList tr[data-pinrow="${n}"]`); tr && tr.classList.add('is-on'); } } });
+      v3dId = l.id;
+      v3d.tags.forEach(b => { const pt = l.puntos.find(x => x.n === Number(b.dataset.pin)); if (pt && pt.ref) { b.dataset.lam = pt.ref; b.dataset.kind = 'ref'; if (pt.ref === estado.ref) b.classList.add('is-on'); } else b.classList.add('sin'); });
+    } catch (e) { console.error('3D', e); el.innerHTML = `<p class="mx-empty">${tr2('Este equipo no puede mostrar el modelo 3D.', 'This device cannot show the 3D model.')}</p>`; }
+  }
   function tabla() {
+    if (v3d && (!estado.lam || estado.lam !== v3dId)) { try { v3d.destruir(); } catch (e) {} v3d = null; v3dId = null; }
     migas(); const L = $('#epcList'); const bd = document.querySelector('#epcOverlay .mx-body'); bd && bd.classList.toggle('is-desp', !!estado.lam);
-    if (estado.lam) return vistaLam();
+    if (estado.lam) { vistaLam(); const l = lamDe(estado.lam); if (l && l.modelo) montar3d(l); return; }
     if (estado.vendidas && estado.vin) { const g = mem.get()[estado.vin.chasis] || {}; const ps = (g.piezas || []).map(r => PRODUCTS_BY_REF[r]).filter(Boolean);
       L.innerHTML = `<div class="mx-th">${tr2('Piezas vendidas a este chasis', 'Parts sold to this chassis')}</div>` + filas(ps, true); lamina(ps.map((p, i) => ({ key: p.ref, kind: 'ref', img: p.img, n: i + 1, on: p.ref === estado.ref })), tr2('Piezas vendidas a este chasis', 'Parts sold to this chassis')); return; }
     if (estado.pn) { const q = norm(estado.pn); const refs = new Set(indiceOE().get(q) || []);
@@ -305,6 +319,7 @@ const EPC = (() => {
     if (b && 'lamnew' in d) { $('#epcLamFile').value = ''; $('#epcLamFile').click(); return true; }
     if (!estado.lam) return false;
     const l = lamDe(estado.lam); if (!l) return false;
+    if (b && d.m3) { if (v3d) { if (d.m3 === 'vista') v3d.vista(); else { v3d.armar(d.m3 === 'armar'); b.parentNode.querySelectorAll('[data-m3]').forEach(x => x.classList.toggle('is-on', x === b)); } } return true; }
     if (b && d.zoom !== undefined) { const v = Number(d.zoom); estado.zoom = v === 0 ? 1 : Math.max(1, Math.min(3, (estado.zoom || 1) + v * 0.5)); tabla(); return true; }
     if (b && 'lamarbol' in d) { const bd = document.querySelector('#epcOverlay .mx-body'); bd && bd.classList.toggle('ver-arbol'); return true; }
     if (b && 'lamed' in d) { estado.edit = true; estado.pin = null; tabla(); lado(); return true; }
@@ -335,6 +350,7 @@ const EPC = (() => {
     estado.ref = ref; estado.tab = 'pieza';
     document.querySelectorAll('#epcOverlay tr.is-on, #epcOverlay .mx-lam-it.is-on, #epcOverlay .mx-pin.is-on').forEach(x => x.classList.remove('is-on'));
     document.querySelectorAll(`#epcList .mx-pin[data-lam="${CSS.escape(ref)}"]`).forEach(x => x.classList.add('is-on'));
+    if (v3d) { const l = lamDe(estado.lam), pt = l && l.puntos.find(x => x.ref === ref); v3d.sel(pt ? pt.n : null); }
     const tr = document.querySelector(`#epcList tr[data-ref="${CSS.escape(ref)}"]`), it = document.querySelector(`#epcLamina [data-lam="${CSS.escape(ref)}"]`);
     if (tr) { tr.classList.add('is-on'); const w = tr.closest('.mx-pts-wrap'); if (w) w.scrollTop = tr.offsetTop - w.clientHeight / 2; else tr.scrollIntoView({ block: 'nearest' }); } if (it) { it.classList.add('is-on'); it.scrollIntoView({ block: 'nearest' }); }
     lado();
