@@ -89,11 +89,11 @@ function grupoEscape(M) { const P = []; const p = (n, nombre, obj, pos, ex) => {
 const ARMADORES = { motor: grupoMotor, caja: grupoCaja, frenos: grupoFrenos, susp: grupoSusp, escape: grupoEscape };
 // dónde va cada grupo en el camión (x hacia delante) y desde dónde se mira
 const SITIO = {
-  motor: { pos: [3.95, 1.08, 0], esc: 0.38, vista: [3.2, 2.0, 4.6] },
-  caja: { pos: [3.08, 0.86, 0], esc: 0.3, vista: [2.4, 1.6, 4.4] },
-  frenos: { pos: [3.7, 0.0, 1.06], esc: 0.075, rotY: -Math.PI / 2, vista: [1.6, 0.7, 2.6] },
-  susp: { pos: [3.7, 0.3, 0.43], esc: 0.33, vista: [1.8, 0.9, 3.4] },
-  escape: { pos: [2.75, 1.25, 1.0], esc: 0.55, vista: [2.4, 1.6, 4.2] },
+  motor: { pos: [3.95, 1.08, 0], esc: 0.38, vista: [3.2, 2.0, 4.6] , etq: [5.0, 2.2, -1.5] },
+  caja: { pos: [3.08, 0.86, 0], esc: 0.3, vista: [2.4, 1.6, 4.4] , etq: [2.4, 1.5, -1.6] },
+  frenos: { pos: [3.7, 0.0, 1.06], esc: 0.075, rotY: -Math.PI / 2, vista: [1.6, 0.7, 2.6] , etq: [3.7, -0.35, 1.75] },
+  susp: { pos: [3.7, 0.3, 0.43], esc: 0.33, vista: [1.8, 0.9, 3.4] , etq: [4.6, 0.35, 1.9] },
+  escape: { pos: [2.75, 1.25, 1.0], esc: 0.55, vista: [2.4, 1.6, 4.2] , etq: [2.75, 3.9, 1.0] },
 };
 
 export function montarCamion(el, { alElegir = () => {}, alGrupo = () => {}, grupo = null, pieza = null } = {}) {
@@ -168,7 +168,7 @@ export function montarCamion(el, { alElegir = () => {}, alGrupo = () => {}, grup
       for (const pz of gr.piezas) { pz.obj.position.copy(pz.base).addScaledVector(new THREE.Vector3(...pz.explota), gr.ex * 1.25); if (pz.ex3 !== undefined) pz.obj.position.x = pz.base.x + pz.ex3 * gr.ex; } }
     r.render(scene, cam);
     const w = W(), h = H(); let svg = '';
-    for (const id in grupos) { const c = centroDe(id); c.y += 1.0 * (SITIO[id].esc + 0.4); v.copy(c).project(cam); const e = etqGrupo[id]; e.style.left = (v.x + 1) / 2 * w + 'px'; e.style.top = (1 - v.y) / 2 * h + 'px'; e.style.display = activo ? 'none' : ''; }
+    for (const id in grupos) { const c = SITIO[id].etq ? new THREE.Vector3(...SITIO[id].etq) : centroDe(id); v.copy(c).project(cam); const e = etqGrupo[id]; e.style.left = (v.x + 1) / 2 * w + 'px'; e.style.top = (1 - v.y) / 2 * h + 'px'; e.style.display = activo ? 'none' : ''; }
     for (const id in grupos) for (const pz of grupos[id].piezas) { const e = etqPieza[pz.n], ver = activo === id && grupos[id].ex > 0.6; e.style.display = ver ? '' : 'none'; if (!ver) continue;
       const c = centroDe(id, pz.n); const a = c.clone().project(cam); const b2 = c.clone(); b2.y += 0.55; const bb = b2.project(cam);
       const ax = (a.x + 1) / 2 * w, ay = (1 - a.y) / 2 * h, bx = (bb.x + 1) / 2 * w, by = (1 - bb.y) / 2 * h - 14; e.style.left = bx + 'px'; e.style.top = by + 'px';

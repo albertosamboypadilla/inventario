@@ -371,14 +371,17 @@ const EPC = (() => {
   function todo() { vehiculo(); arbol(); tabla(); lado(); }
   function ir(c) { Object.assign(estado, { pn: '', vendidas: false, lam: null, edit: false, pin: null, mover: false }, c); if ('sis' in c) estado.lim = 40; todo();
     if (visor) { if (estado.sis) visor.enfocar(estado.sis); else visor.vistaGeneral(); } $('#epcList').scrollTop = 0; }
+  const ZONA3D = { 'Motor': 'motor', 'Caja de cambios': 'caja', 'Sistema de freno': 'frenos', 'Suspensión': 'susp', 'Escape': 'escape' };
+  function abrir3d(zona) { const l = lamDe('M3d-camion'); if (!l) return false; estado.g3d = zona || null; estado.pin = null; ir({ sis: l.sis, sub: null, lam: l.id }); return true; }
   function identificar(txt) { const v = leerVIN(txt); if (!v.chasis) { estado.vin = null; return ir({}); }
-    const g = mem.get()[v.chasis]; estado.vin = v; estado.marca = v.marca || (g && g.marca) || estado.marca || null; ir({ sis: null, sub: null, ref: null }); }
+    const g = mem.get()[v.chasis]; estado.vin = v; estado.marca = v.marca || (g && g.marca) || estado.marca || null; estado.ref = null; if (!abrir3d(null)) ir({ sis: null, sub: null, ref: null }); }
   async function abrir(vin, sis) {
     const o = ov(); o.hidden = false; document.body.classList.add('et-noscroll'); requestAnimationFrame(() => o.classList.add('is-open'));
     cesta.set(cesta.get());
     try { LAMS = await cargarLams(); } catch (e) { LAMS = []; }
     if (vin) { $('#epcVin').value = norm(vin); identificar(vin); }
-    ir({ sis: sis || null, sub: null });
+    if (sis && ZONA3D[sis]) abrir3d(ZONA3D[sis]);        // zona del camión → 3D enfocado en esa zona
+    else if (sis || !vin) { if (!sis && abrir3d(null)) {} else ir({ sis: sis || null, sub: null }); }
     if (!vin) setTimeout(() => $('#epcVin').focus(), 200);
   }
   function cerrar() { const o = ov(); o.classList.remove('is-open'); document.body.classList.remove('et-noscroll'); setTimeout(() => { o.hidden = true; }, 250); }
@@ -435,7 +438,7 @@ const EPC = (() => {
       }
     });
   }
-  return { abrir, cerrar, iniciar, general: () => ir({ sis: null, sub: null }), _lam: { LDB, nueva: f => nuevaLam(f), async recargar() { LAMS = await cargarLams(); todo(); }, ir: id => { const l = lamDe(id); if (l) ir({ sis: l.sis, sub: l.sub || null, lam: id }); } } };
+  return { abrir, cerrar, iniciar, abrir3d, general: () => ir({ sis: null, sub: null }), _lam: { LDB, nueva: f => nuevaLam(f), async recargar() { LAMS = await cargarLams(); todo(); }, ir: id => { const l = lamDe(id); if (l) ir({ sis: l.sis, sub: l.sub || null, lam: id }); } } };
 })();
 
 window.EPC = EPC;
@@ -502,7 +505,8 @@ function puntos(key) {
   box.innerHTML = (HOTS[key] || []).map(([sis, x, y], i) => `<button class="tk-hot ${x > 62 ? 'is-left' : ''}" style="left:${x}%;top:${y}%;--d:${i * 90}ms" data-sis="${esc(sis)}"><i>${String(i + 1).padStart(2, '0')}</i><span><b>${esc(tr2(sis, SIS_EN[sis] || sis))}</b><small>${(CNT[sis] || 0).toLocaleString()} ${tr2('piezas', 'parts')}</small></span></button>`).join('');
 }
 function portada() {
-  const hb = $('#heroHots'); if (hb) hb.addEventListener('click', e => { const b = e.target.closest('[data-sis]'); if (b) EPC.abrir($('#heroChasis').value, b.dataset.sis); });
+  const hb = $('#heroHots'); if (hb) hb.addEventListener('click', e => { const b = e.target.closest('[data-sis]'); if (b) { e.stopPropagation(); EPC.abrir($('#heroChasis').value, b.dataset.sis); } });
+  const hm = $('#heroMedia'); if (hm) { hm.style.cursor = 'pointer'; hm.title = tr2('Toca el camión para verlo en 3D', 'Tap the truck to see it in 3D'); hm.addEventListener('click', e => { if (e.target.closest('a,button,[data-sis]')) return; EPC.abrir($('#heroChasis') ? $('#heroChasis').value : ''); }); }
   const imgs = [...document.querySelectorAll('#heroMedia img')], tabs = [...document.querySelectorAll('#heroTabs button')]; if (!imgs.length) return;
   let i = 0, tm = null;
   const ver = k => { i = (k + imgs.length) % imgs.length; const key = imgs[i].dataset.truck;
