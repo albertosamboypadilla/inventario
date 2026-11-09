@@ -4,21 +4,21 @@ import * as THREE from 'three';
 import { OrbitControls } from './vendor/three/OrbitControls.js';
 import { RoomEnvironment } from './vendor/three/RoomEnvironment.js';
 
-function textura(base, ruido, escala = 512) { // ruido de fundición para que el metal no se vea plástico
+export function textura(base, ruido, escala = 512) { // ruido de fundición para que el metal no se vea plástico
   const c = document.createElement('canvas'); c.width = c.height = escala; const g = c.getContext('2d');
   g.fillStyle = base; g.fillRect(0, 0, escala, escala);
   for (let i = 0; i < escala * 40; i++) { const v = Math.random(); g.fillStyle = `rgba(${v > .5 ? '255,255,255' : '0,0,0'},${Math.random() * ruido})`; g.fillRect(Math.random() * escala, Math.random() * escala, 1 + Math.random() * 2, 1 + Math.random() * 2); }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; return t;
 }
-function rugosidad(ruido) { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, 256, 256);
+export function rugosidad(ruido) { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); g.fillStyle = '#9a9a9a'; g.fillRect(0, 0, 256, 256);
   for (let i = 0; i < 9000; i++) { const v = 120 + Math.random() * 120 * ruido; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(Math.random() * 256, Math.random() * 256, 2, 2); }
   const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t; }
 
-const ext = (shape, depth, mat, bevel = 0.06, seg = 48) => new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 4, curveSegments: seg }), mat);
-const redondo = (w, h, r) => { const s = new THREE.Shape(); s.moveTo(-w + r, -h); s.lineTo(w - r, -h); s.quadraticCurveTo(w, -h, w, -h + r); s.lineTo(w, h - r); s.quadraticCurveTo(w, h, w - r, h); s.lineTo(-w + r, h); s.quadraticCurveTo(-w, h, -w, h - r); s.lineTo(-w, -h + r); s.quadraticCurveTo(-w, -h, -w + r, -h); return s; };
+export const ext = (shape, depth, mat, bevel = 0.06, seg = 48) => new THREE.Mesh(new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: true, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 4, curveSegments: seg }), mat);
+export const redondo = (w, h, r) => { const s = new THREE.Shape(); s.moveTo(-w + r, -h); s.lineTo(w - r, -h); s.quadraticCurveTo(w, -h, w, -h + r); s.lineTo(w, h - r); s.quadraticCurveTo(w, h, w - r, h); s.lineTo(-w + r, h); s.quadraticCurveTo(-w, h, -w, h - r); s.lineTo(-w, -h + r); s.quadraticCurveTo(-w, -h, -w + r, -h); return s; };
 
 /* ───────── Freno de disco neumático de camión ───────── */
-function frenoDisco(M) {
+export function frenoDisco(M) {
   const piezas = [];
   const add = (n, obj, x, nombre, ancla) => { const g = new THREE.Group(); g.add(obj); g.userData = { x, n }; obj.traverse(o => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.userData.n = n; } }); piezas.push({ n, g, nombre, ancla: new THREE.Vector3(...ancla), x }); return g; };
 

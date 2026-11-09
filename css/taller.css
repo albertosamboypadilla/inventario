@@ -664,3 +664,9 @@ main .et-captcha.is-ok .box{background:var(--green);border-color:var(--green);bo
 .mx-3d-ctl button.is-on{background:#1b74e8;border-color:#1b74e8;color:#fff;} .mx-3d-ctl span{margin-left:auto;color:#8597ad;font-size:12px;}
 .mx-pin3d{position:absolute;}
 .mx-lamc .mx-lamc3d{display:grid;place-items:center;height:84px;background:radial-gradient(#102037,#05080e);color:#22b8ff;font:800 22px Consolas,monospace;}
+/* camión 3D: etiquetas de grupo */
+.mx-g3d{position:absolute;transform:translate(-50%,-50%);pointer-events:auto;border:1px solid #2fb4ff;background:rgba(6,14,26,.82);color:#cfeeff;font:700 12px 'Segoe UI',sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:6px 12px;cursor:pointer;box-shadow:0 0 0 4px rgba(47,180,255,.1),0 6px 18px rgba(0,0,0,.5);backdrop-filter:blur(3px);}
+.mx-g3d::before{content:'';display:inline-block;width:7px;height:7px;border-radius:50%;background:#22b8ff;margin-right:7px;box-shadow:0 0 8px #22b8ff;vertical-align:1px;}
+.mx-g3d:hover{background:#12345a;}
+.mx-3d-grupos button{text-transform:none;}
+.mx-n3d{color:#8fb7d8;font-style:normal;}
