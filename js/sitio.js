@@ -293,15 +293,12 @@ function encabezado() {
 }
 function formularios() {
   // pedido: exige "no soy un robot" antes del envío original
-  $('#regForm').addEventListener('submit', e => { if (!ETCaptcha.exigir('regForm')) { e.preventDefault(); e.stopImmediatePropagation(); } else ETCaptcha.tomar('regForm'); }, true);
   // inicio de sesión: casilla dentro del cuadro de acceso
-  const lf = $('#loginForm'); if (lf && !lf.querySelector('[data-captcha]')) { const d = document.createElement('div'); d.className = 'et-captcha-slot'; d.dataset.captcha = 'login'; lf.insertBefore(d, lf.querySelector('button[type=submit]')); ETCaptcha.iniciar(); }
-  lf && lf.addEventListener('submit', e => { if (!ETCaptcha.listo('login')) { e.preventDefault(); e.stopImmediatePropagation(); ETCaptcha.exigir('login'); } }, true);
 }
 
 window.__etProducts = () => (typeof visibleProducts === 'function' ? visibleProducts() : products);
 function arrancar() {
-  try { EPC.iniciar(); ETCaptcha.iniciar(); formularios(); rejillas(); encabezado(); portada(); piezas3d(); } catch (e) { console.error('sitio', e); }
+  try { EPC.iniciar(); formularios(); rejillas(); encabezado(); portada(); piezas3d(); } catch (e) { console.error('sitio', e); }
   document.documentElement.classList.add('et-ready');
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('/sw-pagina.js').catch(() => {});
 }

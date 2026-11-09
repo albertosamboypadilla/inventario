@@ -227,3 +227,9 @@ main .et-captcha.is-ok .box{background:var(--green);border-color:var(--green);bo
 .et-more{border-radius:0;font-family:var(--mono);border-color:rgba(34,227,255,.3);color:#7ff0ff;}
 .et-hero-tip{border-radius:0;background:rgba(6,10,16,.92);border:1px solid rgba(34,227,255,.45);}
 .et-hero-tip b{color:#22e3ff;text-transform:uppercase;font-family:var(--mono);}
+
+/* Logo clásico de Eurotruck (camión azul) */
+.et-mark.et-mark--clasico{width:76px;height:44px;background:none;clip-path:none;border-radius:0;box-shadow:none;}
+.et-mark.et-mark--clasico svg{width:76px;height:44px;}
+.et-mark.et-mark--clasico svg path:first-child,.et-mark.et-mark--clasico svg path:last-child{fill:url(#etLogoAzul);}
+@media (max-width:560px){.et-mark.et-mark--clasico,.et-mark.et-mark--clasico svg{width:62px;height:36px;}}
