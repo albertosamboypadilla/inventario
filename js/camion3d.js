@@ -12,6 +12,7 @@ export const GRUPOS = [
   { id: 'frenos', nombre: 'Frenos', sis: 'Sistema de freno' },
   { id: 'susp', nombre: 'Suspensión', sis: 'Suspensión' },
   { id: 'escape', nombre: 'Escape', sis: 'Escape' },
+  { id: 'trasera', nombre: 'Parte trasera y luces', sis: 'Sistema eléctrico' },
 ];
 
 function materiales() {
@@ -86,13 +87,26 @@ function grupoEscape(M) { const P = []; const p = (n, nombre, obj, pos, ex) => {
   { const g = new THREE.Group(); const t = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new THREE.Vector3(0, -1.35, 0), new THREE.Vector3(0.6, -1.7, -0.4), new THREE.Vector3(1.6, -1.6, -1.2)]), 40, 0.12, 16), M.caliente); g.add(t); p(504, 'Tubo flexible de escape', g, [0, 0, 0], [0.6, -0.8, -0.6]); }
   return P; }
 
-const ARMADORES = { motor: grupoMotor, caja: grupoCaja, frenos: grupoFrenos, susp: grupoSusp, escape: grupoEscape };
+function grupoTrasera(M) { const P = []; const p = (n, nombre, obj, pos, ex) => { obj.position.set(...pos); P.push({ n, nombre, obj, explota: ex }); };
+  const rojo = new THREE.MeshStandardMaterial({ color: 0xc81e1e, emissive: 0x7a0000, emissiveIntensity: 0.6, roughness: 0.25 }), ambar = new THREE.MeshStandardMaterial({ color: 0xff9d1a, emissive: 0x7a3d00, emissiveIntensity: 0.6, roughness: 0.25 }), blanco = new THREE.MeshStandardMaterial({ color: 0xf2f6ff, emissive: 0x556070, emissiveIntensity: 0.5, roughness: 0.2 });
+  for (const z of [-1, 1]) { const g = new THREE.Group(); g.add(caja(0.12, 0.32, 0.75, M.negro)); [[rojo, -0.22], [ambar, 0.02], [blanco, 0.24]].forEach(([m, dz]) => { const l = caja(0.03, 0.24, 0.2, m); l.position.set(-0.07, 0, dz * z); g.add(l); });
+    p(z < 0 ? 601 : 602, z < 0 ? 'Piloto trasero izquierdo' : 'Piloto trasero derecho', g, [0, 0, z * 0.95], [-0.5, 0, z * 0.6]); }
+  { const g = new THREE.Group(); g.add(caja(0.14, 0.18, 2.3, M.acero)); [-0.9, 0.9].forEach(z => { const s = caja(0.1, 0.5, 0.1, M.acero); s.position.set(0.05, 0.3, z); g.add(s); }); p(603, 'Parachoques trasero (antiempotramiento)', g, [0.05, -0.45, 0], [-0.6, -0.5, 0]); }
+  for (const z of [-1, 1]) { const g = new THREE.Group(); g.add(caja(0.02, 0.6, 0.55, M.goma)); p(z < 0 ? 604 : 605, z < 0 ? 'Faldón (guardabarros) izquierdo' : 'Faldón (guardabarros) derecho', g, [0.4, -0.05, z * 1.15], [-0.3, 0, z * 0.5]); }
+  { const g = new THREE.Group(); g.add(caja(0.03, 0.22, 0.6, blanco)); p(606, 'Soporte de matrícula', g, [-0.05, -0.2, 0.0], [-0.7, 0.2, 0]); }
+  { const g = new THREE.Group(); g.add(caja(0.05, 0.05, 0.14, blanco)); p(607, 'Luz de matrícula', g, [-0.06, 0.0, 0.0], [-0.9, 0.5, 0]); }
+  for (const z of [-1, 1]) { const g = new THREE.Group(); g.add(caja(0.04, 0.06, 0.06, ambar)); p(z < 0 ? 608 : 609, z < 0 ? 'Luz de gálibo lateral izquierda' : 'Luz de gálibo lateral derecha', g, [0.9, 0.05, z * 0.5], [0, 0.4, z * 0.6]); }
+  { const g = new THREE.Group(); const c = cil(0.03, 0.03, 1.6, M.negro, 8); c.rotation.x = Math.PI / 2; g.add(c); const e = caja(0.1, 0.1, 0.16, M.negro); e.position.z = 0.85; g.add(e); p(610, 'Conector eléctrico del remolque (7/15 polos)', g, [1.2, 0.7, 0.4], [0, 0.8, 0]); }
+  return P; }
+
+const ARMADORES = { trasera: grupoTrasera, motor: grupoMotor, caja: grupoCaja, frenos: grupoFrenos, susp: grupoSusp, escape: grupoEscape };
 // dónde va cada grupo en el camión (x hacia delante) y desde dónde se mira
 const SITIO = {
   motor: { pos: [3.95, 1.08, 0], esc: 0.38, vista: [3.2, 2.0, 4.6] , etq: [5.0, 2.2, -1.5] },
   caja: { pos: [3.08, 0.86, 0], esc: 0.3, vista: [2.4, 1.6, 4.4] , etq: [2.4, 1.5, -1.6] },
   frenos: { pos: [3.7, 0.0, 1.06], esc: 0.075, rotY: -Math.PI / 2, vista: [1.6, 0.7, 2.6] , etq: [3.7, -0.35, 1.75] },
   susp: { pos: [3.7, 0.3, 0.43], esc: 0.33, vista: [1.8, 0.9, 3.4] , etq: [4.6, 0.35, 1.9] },
+  trasera: { pos: [-4.75, 0.55, 0], esc: 1, vista: [-3.4, 1.4, 3.6], etq: [-5.0, 1.4, 0.9] },
   escape: { pos: [2.75, 1.25, 1.0], esc: 0.55, vista: [2.4, 1.6, 4.2] , etq: [2.75, 3.9, 1.0] },
 };
 
