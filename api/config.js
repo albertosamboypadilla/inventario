@@ -1,7 +1,9 @@
-// Vercel: entrega a la página la dirección del servidor de tu PC.
-// Se configura en Vercel → Project → Settings → Environment Variables → SERVIDOR_URL
+// Vercel: entrega a la página las direcciones de los servidores.
+// Se configuran en Vercel → Project → Settings → Environment Variables:
+//   SERVIDOR_URL    = SAMBOY1 (principal)
+//   SERVIDOR_URL_2  = SAMBOY2 (respaldo: la página pasa sola a este si SAMBOY1 no responde)
 module.exports = (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.end(JSON.stringify({ servidorUrl: process.env.SERVIDOR_URL || '' }));
+  res.end(JSON.stringify({ servidorUrl: process.env.SERVIDOR_URL || '', servidorUrl2: process.env.SERVIDOR_URL_2 || '' }));
 };

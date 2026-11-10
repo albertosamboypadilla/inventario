@@ -935,15 +935,64 @@ function srvSettings(){
 function srvSave(patch){ try{ localStorage.setItem(SRV_KEY, JSON.stringify(Object.assign(_srvLocal(), patch))); }catch(e){} }
 function serverConfigured(){ const s = srvSettings(); return !!(s.url && s.token); }
 let _srvConfigTried = false;
-// En Vercel, /api/config entrega la dirección del servidor (variable de entorno SERVIDOR_URL).
+/* Dos servidores: SAMBOY1 (principal) y SAMBOY2 (respaldo). Si SAMBOY1 no responde, la página
+   pasa sola a SAMBOY2; cuando SAMBOY1 vuelve (y SAMBOY2 ya le subió todo), regresa sola. */
+window.EUROTRUCK_SERVER.urls = window.EUROTRUCK_SERVER.urls || [];
+async function srvProbe(u, ms){
+  try{
+    const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), ms || 4000);
+    const r = await fetch(u + '/api/salud', {cache:'no-store', signal:ctl.signal}); clearTimeout(t);
+    return r.ok ? await r.json() : null;
+  }catch(e){ return null; }
+}
+// En Vercel, /api/config entrega las direcciones (variables de entorno SERVIDOR_URL y SERVIDOR_URL_2).
 async function loadServerConfig(){
-  if(_srvConfigTried || window.EUROTRUCK_SERVER.url || location.protocol === 'file:') return;
+  if(_srvConfigTried || location.protocol === 'file:') return;
   _srvConfigTried = true;
+  if(window.EUROTRUCK_SERVER.url) return; // dirección fija escrita en config.js
+  let urls = [];
   try{
     const ctl = new AbortController(); const t = setTimeout(()=>ctl.abort(), 3000);
     const r = await fetch('/api/config', {cache:'no-store', signal:ctl.signal}); clearTimeout(t);
-    if(r.ok){ const j = await r.json(); if(j && j.servidorUrl) window.EUROTRUCK_SERVER.url = j.servidorUrl; }
+    if(r.ok){ const j = await r.json(); urls = [j && j.servidorUrl, j && j.servidorUrl2].filter(Boolean).map(u=>String(u).trim().replace(/\/+$/,'')); }
   }catch(e){}
+  if(!urls.length) return;
+  window.EUROTRUCK_SERVER.urls = urls;
+  let elegido = urls[0];
+  if(urls.length > 1 && !(await srvProbe(urls[0], 3500)) && (await srvProbe(urls[1], 3500))) elegido = urls[1];
+  window.EUROTRUCK_SERVER.url = elegido;
+  srvVigilar();
+}
+let _srvVig = null, _srvCambiando = false;
+function srvVigilar(){
+  if(_srvVig || window.EUROTRUCK_SERVER.urls.length < 2) return;
+  _srvVig = setInterval(async ()=>{
+    if(_srvCambiando || document.hidden || !navigator.onLine) return;
+    const [p, r] = window.EUROTRUCK_SERVER.urls; const act = window.EUROTRUCK_SERVER.url;
+    if(act === p){
+      if((await srvProbe(p)) || (await srvProbe(p))) return;   // dos intentos antes de cambiar
+      if(await srvProbe(r)) srvCambiar(r, 'SAMBOY1 no responde: ahora trabajas con SAMBOY2. Todo se sincroniza solo.');
+    } else {
+      if(!(await srvProbe(p))) return;
+      const s = await srvProbe(r);
+      if(s && s.replica && s.replica.pendientes > 0) return;   // esperar a que SAMBOY2 le suba todo a SAMBOY1
+      srvCambiar(p, 'SAMBOY1 volvió: trabajas otra vez con el servidor principal.');
+    }
+  }, 20000);
+}
+async function srvCambiar(u, msg){
+  _srvCambiando = true;
+  try{
+    window.EUROTRUCK_SERVER.url = u; srvSave({url:u});
+    try{ showToast(msg); }catch(e){}
+    if(dbApi && dbApi.kind === 'server'){
+      try{ saveLocalFallback(); }catch(e){}
+      try{ dbApi.stop(); }catch(e){}
+      dbApi = null;
+      try{ const api = await makeServerDbApi(srvSettings()); dbApi = api; await api.start(); }
+      catch(err){ if(dbApi && dbApi.stop) dbApi.stop(); dbApi = null; setSyncStatus(err && err.offline ? 'offline' : 'error', err && err.message); setTimeout(()=>{ if(!dbApi && serverConfigured()) initData(); }, 15000); }
+    }
+  } finally { _srvCambiando = false; }
 }
 async function serverLogin(u, p){
   await loadServerConfig();
@@ -1026,7 +1075,9 @@ function isUntouchedInvRow(ref, row){
 
 async function makeServerDbApi(cfg){
   const BASE = cfg.url + '/api/eurotruck';
-  const syncKey = 'srv_sync:' + cfg.url;
+  // Un solo estado para los dos servidores: tienen las mismas versiones de cada artículo;
+  // solo el número de orden (seq) es propio de cada uno.
+  const syncKey = 'srv_sync:eurotruck';
   let stopped = false, es = null, pullTimer = null, flushTimer = null, periodic = null;
   let pulling = false, pullAgain = false, flushing = false, flushAgain = false;
 
@@ -1045,8 +1096,12 @@ async function makeServerDbApi(cfg){
 
   // Estado sincronizado: lo último que esta PC sabe que está en el servidor ("base")
   let S = await idbGet(syncKey);
+  if(!S){ S = await idbGet('srv_sync:' + cfg.url); if(S) S.srv = cfg.url; }   // estado de la versión anterior
   const firstSync = !S;
-  if(!S) S = {seqInv:0, seqDocs:0, inv:{}, docs:{}};
+  if(!S) S = {seqInv:0, seqDocs:0, inv:{}, docs:{}, srv: cfg.url};
+  // cambió de servidor: bajar todo otra vez (incluidos eliminados) comparando el contenido
+  if(S.srv !== cfg.url){ S.srv = cfg.url; S.seqInv = -1; S.seqDocs = -1; S.completa = true; }
+  const distinto = (b, row) => S.completa && !row.deleted && b.v === row.version && JSON.stringify(row.data) !== b.s;
   let saveSTimer = null;
   const saveS = ()=>{ clearTimeout(saveSTimer); saveSTimer = setTimeout(()=> idbPut(syncKey, S), 300); };
   const parse = s => s === undefined ? undefined : JSON.parse(s);
@@ -1067,7 +1122,7 @@ async function makeServerDbApi(cfg){
       const remoteEmpty = S.seqInv === 0 && !inv.rows.length;
       for(const row of inv.rows){
         const b = S.inv[row.id];
-        if(b && b.v >= row.version) continue; // es nuestro propio cambio
+        if(b && b.v >= row.version && !distinto(b, row)) continue; // es nuestro propio cambio
         const local = inventoryState[row.id];
         const localStr = local === undefined ? undefined : JSON.stringify(local);
         if(row.deleted){
@@ -1090,7 +1145,7 @@ async function makeServerDbApi(cfg){
       for(const row of docs.rows){
         const h = SRV_DOCS[row.id]; if(!h) continue;
         const b = S.docs[row.id];
-        if(b && b.v >= row.version) continue;
+        if(b && b.v >= row.version && !distinto(b, row)) continue;
         if(row.deleted) continue;
         const local = h.get(); const localStr = JSON.stringify(local);
         let next;
@@ -1102,6 +1157,7 @@ async function makeServerDbApi(cfg){
         changed = true;
       }
       S.seqDocs = docs.seq;
+      S.completa = false;
       saveS();
       if(changed) afterRemoteChange();
       if(navigator.onLine) setSyncStatus(hasPending() ? 'saving' : 'ok');
