@@ -278,7 +278,7 @@ function refreshChip(){
 const isGuest = ()=> !cfg.token && !!cfg.guest;
 let PUB = {stock:{}, nuevos:{}, eliminados:[]};
 async function loadPublic(){
-  try{ cfg.url = await serverUrl(); const r = await fetch(cfg.url + '/api/' + APP + '/publico', {cache:'no-store'}); if(r.ok){ PUB = await r.json(); save('etm_pub', PUB); } }
+  try{ cfg.url = cfg.url || await serverUrl(); const r = await fetch(cfg.url + '/api/' + APP + '/publico', {cache:'no-store'}); if(r.ok){ PUB = await r.json(); save('etm_pub', PUB); } }
   catch(e){ PUB = load('etm_pub', PUB); }
 }
 function stockOf(ref){ if(isGuest()) return Number(PUB.stock[ref]) || 0; const row = view().inv[ref]; return row ? Number(row.stock) || 0 : 0; }
@@ -338,51 +338,10 @@ const locLabel = l=>{ if(!l) return 'Pendiente'; const m = /^([^/]+)\/([^/]+)$/.
 const PH = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56"><rect width="56" height="56" fill="#e5e7eb"/><path d="M16 36l8-10 6 7 4-5 6 8z" fill="#9ca3af"/></svg>');
 
 /* ---------- servidor ---------- */
-/* Dos servidores: SAMBOY1 (principal) y SAMBOY2 (respaldo). Si SAMBOY1 no responde se pasa
-   solo a SAMBOY2, y vuelve a SAMBOY1 cuando regresa (y SAMBOY2 ya le subió todo). */
-let _srvElegido = false, _srvVig = null, _srvCambiando = false;
-async function probe(u, ms){
-  try{ const c = new AbortController(); const t = setTimeout(()=>c.abort(), ms || 4000);
-    const r = await fetch(u + '/api/salud', {cache:'no-store', signal:c.signal}); clearTimeout(t); return r.ok ? await r.json() : null; }
-  catch(e){ return null; }
-}
 async function serverUrl(){
-  if(_srvElegido && cfg.url) return cfg.url;
-  _srvElegido = true;
-  try{ const r = await fetch('/api/config', {cache:'no-store'}); if(r.ok){ const j = await r.json();
-    const us = [j.servidorUrl, j.servidorUrl2].filter(Boolean).map(u=>String(u).trim().replace(/\/+$/,''));
-    if(us.length){ cfg.urls = us; save(LS.cfg, cfg); } } }catch(e){}
-  const us = (cfg.urls && cfg.urls.length) ? cfg.urls : [cfg.url || DEFAULT_SERVER];
-  const antes = cfg.url;
-  cfg.url = us[0];
-  if(us.length > 1 && !(await probe(us[0], 3500)) && (await probe(us[1], 3500))) cfg.url = us[1];
-  if(antes && antes !== cfg.url){ cache.seqInv = -1; cache.seqDocs = -1; saveCache(); }
-  save(LS.cfg, cfg); vigilar();
-  return cfg.url;
-}
-function vigilar(){
-  if(_srvVig || !(cfg.urls && cfg.urls.length > 1)) return;
-  _srvVig = setInterval(async()=>{
-    if(_srvCambiando || document.hidden || !navigator.onLine) return;
-    const [p, r] = cfg.urls;
-    if(cfg.url === p){
-      if((await probe(p)) || (await probe(p))) return;
-      if(await probe(r)) cambiar(r, 'SAMBOY1 no responde: usando SAMBOY2');
-    } else {
-      if(!(await probe(p))) return;
-      const s = await probe(r); if(s && s.replica && s.replica.pendientes > 0) return;
-      cambiar(p, 'SAMBOY1 volvió: usando el principal');
-    }
-  }, 20000);
-}
-function cambiar(u, msg){
-  _srvCambiando = true;
-  try{
-    cfg.url = u; save(LS.cfg, cfg);
-    cache.seqInv = -1; cache.seqDocs = -1; saveCache();   // bajar todo del otro servidor (incluye eliminados)
-    try{ toast(msg); }catch(e){}
-    if(cfg.token){ connectLive(); pull(); runOps(); }
-  } finally { _srvCambiando = false; }
+  if(cfg.url) return cfg.url;
+  try{ const r = await fetch('/api/config', {cache:'no-store'}); if(r.ok){ const j = await r.json(); if(j.servidorUrl){ cfg.url = j.servidorUrl.replace(/\/+$/,''); save(LS.cfg, cfg); return cfg.url; } } }catch(e){}
+  return DEFAULT_SERVER;
 }
 async function api(method, path, body){
   let r;
@@ -1244,7 +1203,7 @@ if('serviceWorker' in navigator && (location.protocol === 'https:' || location.h
 
 (async()=>{
   $('srvNote').textContent = 'Se conecta al servidor de la PC de la empresa.';
-  if(cfg.token){ cfg.url = await serverUrl(); startApp(); }
+  if(cfg.token){ cfg.url = cfg.url || await serverUrl(); startApp(); }
   else if(cfg.guest){ startGuest(); }
   else { $('login').style.display = 'flex'; }
 })();
