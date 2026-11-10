@@ -36,3 +36,11 @@ window.FIREBASE_CONFIG = {
   messagingSenderId: "",
   appId: ""
 };
+
+/* Búsqueda por chasis (EPC 3D): apagada por ahora. Para volver a encenderla, cambia a true. El código sigue en js/sitio.js. */
+window.ET_EPC = false;
+document.documentElement.classList.toggle('sin-epc', !window.ET_EPC);
+document.documentElement.classList.add('moderno', 'pro');
+/* Tema: claro por defecto; el botón de la luna lo cambia y se recuerda en este equipo */
+try { if (localStorage.getItem('et_tema') === 'oscuro' || (!localStorage.getItem('et_tema') && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('oscuro'); } catch (e) {}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('#mdTema'); if (!b) return; const o = document.documentElement.classList.toggle('oscuro'); try { localStorage.setItem('et_tema', o ? 'oscuro' : 'claro'); } catch (e) {} const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = o ? '#0d1117' : '#ffffff'; });

@@ -1,0 +1,222 @@
+/* ══════════════════════════════════════════════════════════════
+   EUROTRUCK · diseño moderno claro (2026-11)
+   Se carga al final. Fondo claro, tarjetas blancas, naranja Eurotruck, letra grande y botones claros.
+   Para volver al diseño oscuro: quitar la clase "moderno" en js/config.js.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── búsqueda por chasis apagada (el código sigue ahí) ── */
+html.sin-epc .et-nav-epc, html.sin-epc .et-chasis, html.sin-epc #sistemas, html.sin-epc #heroHots,
+html.sin-epc .catalog-section .et-sec-head--row > .et-btn, html.sin-epc #epcOverlay { display: none !important; }
+
+html.moderno {
+  --bg:#f5f6f8; --bg-2:#eceef2; --card:#ffffff; --card-2:#f7f8fa; --card-3:#eef0f4;
+  --stroke:#e3e6eb; --stroke-2:#d5d9e0; --text:#14171c; --soft:#3f4651; --mute:#6b7280;
+  --acc:#f26a10; --acc-2:#ff8c3a; --acc-glow:rgba(242,106,16,.22); --green:#0e9f6e; --red:#e02424; --blue:#1d64d8;
+  --r:14px; --r-lg:18px; --f-display:'Inter',system-ui,sans-serif; --f-body:'Inter',system-ui,-apple-system,sans-serif;
+  --ink:var(--bg); --ink-soft:var(--bg-2); --panel:var(--card); --panel-blue:var(--card-2); --line:var(--stroke-2);
+  --muted:var(--mute); --white:var(--text); --route-blue:var(--acc); --route-blue-soft:var(--acc-2);
+  --cy:#1d64d8; --cut:none; color-scheme: light;
+}
+html.moderno body { background: var(--bg) !important; color: var(--text) !important; font-family: var(--f-body) !important; }
+html.moderno body::before, html.moderno body::after { display: none !important; }
+html.moderno #splash { background: #fff !important; }
+html.moderno #splash b { color: #14171c !important; } html.moderno #splash small { color: var(--mute) !important; }
+html.moderno .tk-chap, html.moderno .tk-ref, html.moderno .tk-plate-head, html.moderno .tk-barcode, html.moderno .marquee-banner { display: none !important; }
+
+/* ── barra superior y encabezado ── */
+html.moderno .et-topbar { background: #14171c !important; color: #d1d5db !important; border: 0 !important; }
+html.moderno .et-topbar a, html.moderno .et-topbar button { color: #e5e7eb !important; }
+html.moderno .et-header { background: rgba(255,255,255,.92) !important; backdrop-filter: blur(12px); box-shadow: 0 1px 0 var(--stroke), 0 6px 24px -18px rgba(0,0,0,.35) !important; }
+html.moderno .et-bar { min-height: 72px; }
+html.moderno .et-word b { color: #14171c !important; letter-spacing: .02em; } html.moderno .et-word small { color: var(--mute) !important; }
+html.moderno .et-nav a, html.moderno .et-nav button { color: #2b313a !important; font-weight: 600 !important; font-size: 15px !important; text-transform: none !important; letter-spacing: 0 !important; border-radius: 10px !important; padding: 9px 14px !important; background: transparent !important; border: 0 !important; clip-path: none !important; }
+html.moderno .et-nav a:hover, html.moderno .et-nav a.nav-active { background: #fff1e7 !important; color: var(--acc) !important; }
+html.moderno .et-nav .et-staff { background: #eef2ff !important; color: #1d4ed8 !important; }
+html.moderno .et-icon-btn { background: var(--card-3) !important; border: 0 !important; color: #14171c !important; border-radius: 12px !important; }
+
+/* ── botones ── */
+html.moderno .et-btn { border-radius: 12px !important; clip-path: none !important; text-transform: none !important; letter-spacing: 0 !important; font-weight: 600 !important; box-shadow: none !important; }
+html.moderno .et-btn--accent { background: var(--acc) !important; border-color: var(--acc) !important; color: #fff !important; }
+html.moderno .et-btn--accent:hover { background: #d95a06 !important; }
+html.moderno .et-btn--ghost { background: #fff !important; border: 1px solid var(--stroke-2) !important; color: #14171c !important; }
+html.moderno .et-btn--ghost:hover { border-color: #14171c !important; }
+html.moderno .et-btn--green { background: var(--green) !important; border-color: var(--green) !important; color: #fff !important; }
+
+/* ── portada ── */
+html.moderno .tk-hero { background: radial-gradient(1200px 500px at 85% -10%, #ffe7d6 0%, rgba(255,231,214,0) 60%), linear-gradient(180deg, #fff 0%, var(--bg) 100%) !important; padding: 56px 0 40px !important; border: 0 !important; }
+html.moderno .tk-hero::before, html.moderno .tk-hero::after { display: none !important; }
+html.moderno .tk-hero-grid { align-items: center !important; gap: 48px !important; }
+html.moderno .tk-hero h1 { color: #14171c !important; font-family: var(--f-display) !important; font-size: clamp(36px, 5vw, 60px) !important; line-height: 1.05 !important; letter-spacing: -.03em !important; font-weight: 800 !important; text-transform: none !important; }
+html.moderno .tk-hero h1 em { color: var(--acc) !important; font-style: normal !important; }
+html.moderno .tk-hero-copy > p { color: var(--soft) !important; font-size: 18px !important; max-width: 520px; }
+html.moderno .md-buscar { display: flex; align-items: center; gap: 10px; background: #fff; border: 2px solid #14171c; border-radius: 16px; padding: 8px 8px 8px 16px; margin: 26px 0 14px; box-shadow: 0 18px 40px -24px rgba(20,23,28,.45); max-width: 620px; }
+html.moderno .md-buscar svg { width: 22px; height: 22px; fill: none; stroke: #14171c; stroke-width: 2; flex: none; }
+html.moderno .md-buscar input { flex: 1; border: 0; outline: 0; font: 500 17px var(--f-body); color: #14171c; background: transparent; min-width: 0; padding: 10px 0; }
+html.moderno .md-buscar .et-btn { padding: 13px 26px !important; font-size: 16px !important; }
+html.moderno .md-rapidos { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; color: var(--mute); font-size: 14px; margin-bottom: 22px; }
+html.moderno .md-rapidos button { border: 1px solid var(--stroke-2); background: #fff; color: #2b313a; border-radius: 999px; padding: 7px 14px; font: 500 14px var(--f-body); cursor: pointer; }
+html.moderno .md-rapidos button:hover { border-color: var(--acc); color: var(--acc); }
+html.moderno .tk-plate { background: #fff !important; border: 0 !important; border-radius: 22px !important; overflow: hidden; box-shadow: 0 30px 60px -30px rgba(20,23,28,.45) !important; clip-path: none !important; padding: 0 !important; }
+html.moderno .tk-photo { border-radius: 0 !important; border: 0 !important; }
+html.moderno .tk-photo::before, html.moderno .tk-photo::after { display: none !important; }
+html.moderno .tk-plate-foot { background: #fff !important; color: var(--soft) !important; border: 0 !important; padding: 14px 16px !important; }
+html.moderno .tk-tabs button { color: #4b5563 !important; border-radius: 999px !important; background: var(--card-3) !important; border: 0 !important; }
+html.moderno .tk-tabs button.is-on { background: #14171c !important; color: #fff !important; }
+html.moderno .tk-tabs button i { display: none !important; }
+html.moderno .et-hero-media { cursor: default !important; }
+
+/* ── franja de datos ── */
+html.moderno .et-stats-band { background: transparent !important; border: 0 !important; padding: 8px 0 24px !important; }
+html.moderno .et-stats > div { background: #fff !important; border: 1px solid var(--stroke) !important; border-radius: 16px !important; padding: 18px 20px !important; }
+html.moderno .et-stats b { color: #14171c !important; font-family: var(--f-display) !important; font-size: 28px !important; }
+html.moderno .et-stats span { color: var(--mute) !important; }
+
+/* ── secciones ── */
+html.moderno .et-section { background: transparent !important; border: 0 !important; padding: 56px 0 !important; }
+html.moderno .et-section::before, html.moderno .et-section::after { display: none !important; }
+html.moderno .et-kicker { color: var(--acc) !important; font: 700 13px var(--f-body) !important; letter-spacing: .08em !important; }
+html.moderno .et-sec-head h2 { color: #14171c !important; font-family: var(--f-display) !important; font-weight: 800 !important; letter-spacing: -.02em !important; text-transform: none !important; font-size: clamp(28px, 3.4vw, 40px) !important; }
+html.moderno .et-sec-head p { color: var(--soft) !important; }
+html.moderno .et-brand-grid > *, html.moderno .et-svc, html.moderno .et-card, html.moderno .reg-form, html.moderno .faq-list > * { background: #fff !important; border: 1px solid var(--stroke) !important; border-radius: 18px !important; box-shadow: 0 12px 30px -26px rgba(20,23,28,.5) !important; clip-path: none !important; color: var(--text) !important; }
+html.moderno .et-brand-grid > *:hover, html.moderno .et-svc:hover { border-color: var(--acc) !important; transform: translateY(-2px); transition: .2s; }
+html.moderno .et-svc h3 { color: #14171c !important; } html.moderno .et-svc p { color: var(--soft) !important; }
+html.moderno .et-svc-n { color: var(--acc) !important; background: #fff1e7 !important; border-radius: 10px !important; padding: 4px 10px !important; }
+html.moderno .et-svc.is-green .et-svc-n { color: var(--green) !important; background: #e7f8f1 !important; }
+
+/* ── catálogo ── */
+html.moderno .catalog-section { background: #fff !important; border-top: 1px solid var(--stroke) !important; border-bottom: 1px solid var(--stroke) !important; }
+html.moderno .et-search, html.moderno .catalog-search { background: var(--bg) !important; border: 2px solid var(--stroke-2) !important; border-radius: 14px !important; clip-path: none !important; }
+html.moderno .et-search:focus-within { border-color: #14171c !important; background: #fff !important; }
+html.moderno .et-search input { color: #14171c !important; font-size: 16px !important; }
+html.moderno .et-search svg { stroke: #6b7280 !important; }
+html.moderno .filter-chip { background: #fff !important; border: 1px solid var(--stroke-2) !important; color: #2b313a !important; border-radius: 999px !important; clip-path: none !important; text-transform: none !important; letter-spacing: 0 !important; }
+html.moderno .filter-chip.is-active { background: #14171c !important; border-color: #14171c !important; color: #fff !important; }
+html.moderno .filter-group > span, html.moderno .catalog-meta { color: var(--mute) !important; }
+html.moderno .product-card { background: #fff !important; border: 1px solid var(--stroke) !important; border-radius: 18px !important; box-shadow: 0 1px 2px rgba(0,0,0,.04) !important; clip-path: none !important; transition: box-shadow .2s, transform .2s, border-color .2s; }
+html.moderno .product-card:hover { border-color: #cfd4dc !important; box-shadow: 0 18px 36px -24px rgba(20,23,28,.45) !important; transform: translateY(-2px); }
+html.moderno .product-card * { color: inherit; }
+html.moderno .product-card { color: #14171c !important; }
+html.moderno .product-visual { background: #f6f7f9 !important; border-radius: 14px 14px 0 0 !important; }
+html.moderno .product-sku, html.moderno .product-idlines, html.moderno .product-refs-list { color: var(--mute) !important; }
+
+/* ── registro, preguntas, pie ── */
+html.moderno .et-reg-copy h2, html.moderno .et-faq-side h2 { color: #14171c !important; }
+html.moderno .et-reg-copy p, html.moderno .et-faq-side p, html.moderno .et-checks li { color: var(--soft) !important; }
+html.moderno .reg-form input, html.moderno .reg-form select, html.moderno .reg-form textarea { background: var(--bg) !important; border: 1px solid var(--stroke-2) !important; color: #14171c !important; border-radius: 12px !important; }
+html.moderno .reg-form label { color: #2b313a !important; }
+html.moderno .et-footer { background: #14171c !important; color: #cbd0d8 !important; border: 0 !important; }
+html.moderno .et-footer a { color: #fff !important; }
+
+@media (max-width: 760px) {
+  html.moderno .tk-hero { padding: 28px 0 24px !important; }
+  html.moderno .md-buscar { flex-wrap: wrap; padding: 8px; } html.moderno .md-buscar input { width: calc(100% - 40px); }
+  html.moderno .md-buscar .et-btn { width: 100%; }
+}
+
+/* restos del tema oscuro */
+html.moderno main { background: var(--bg) !important; background-image: none !important; }
+html.moderno main::before, html.moderno main::after, html.moderno .tk-hero::before { display: none !important; }
+html.moderno .tk-hero { background: radial-gradient(1100px 480px at 88% -8%, #ffe4cf 0%, rgba(255,228,207,0) 62%), #fff !important; }
+html.moderno .et-search, html.moderno .catalog-search, html.moderno .faq-search { background: #f5f6f8 !important; }
+html.moderno .et-search input, html.moderno .md-buscar input { font-family: var(--f-body) !important; letter-spacing: 0 !important; }
+html.moderno .reg-form input, html.moderno .reg-form select, html.moderno .reg-form textarea { background: #f5f6f8 !important; }
+html.moderno .scan-camera-btn { background: #fff !important; border: 1px solid var(--stroke-2) !important; color: #14171c !important; border-radius: 10px !important; }
+html.moderno .filter-chip, html.moderno .filter-group > span, html.moderno .catalog-meta, html.moderno .et-stats span, html.moderno .tk-plate-foot, html.moderno .tk-tabs button { font-family: var(--f-body) !important; letter-spacing: 0 !important; text-transform: none !important; }
+html.moderno .tk-tabs button:not(.is-on) { background: #f1f2f5 !important; color: #4b5563 !important; }
+html.moderno .et-icon-btn { background: #f1f2f5 !important; }
+html.moderno .et-icon-btn svg { stroke: #14171c !important; fill: none !important; }
+html.moderno .et-hero-links .et-btn--green { background: #0e9f6e !important; }
+html.moderno .tk-hero-copy > p { color: #3f4651 !important; }
+html.moderno .md-rapidos span { color: #6b7280 !important; }
+html.moderno .product-card h3, html.moderno .product-card .product-info h3, html.moderno .product-card [class*="title"] { color: #14171c !important; text-transform: none !important; }
+html.moderno .product-card .product-sku b, html.moderno .product-card .product-sku strong { color: #14171c !important; }
+html.moderno .et-lang button { background: transparent !important; color: #e5e7eb !important; border-color: #4b5563 !important; }
+html.moderno .et-lang button.is-selected { background: #f26a10 !important; color: #fff !important; }
+html.moderno .et-topbar { font-family: var(--f-body) !important; letter-spacing: 0 !important; }
+html.moderno .et-topbar a span { color: #9ca3af !important; }
+html.moderno .et-word small { letter-spacing: .12em !important; font-family: var(--f-body) !important; }
+html.moderno .et-nav a.nav-active::after { display: none !important; }
+html.moderno .et-kicker::before { background: var(--acc) !important; }
+html.moderno main, html.moderno body { --bg:#f5f6f8; --bg-2:#eceef2; --card:#fff; --card-2:#f7f8fa; --card-3:#eef0f4; --stroke:#e3e6eb; --stroke-2:#d5d9e0; --text:#14171c; --soft:#3f4651; --mute:#6b7280; --acc:#f26a10; --cy:#1d64d8; }
+html.moderno main { background: #f5f6f8 !important; }
+html.moderno .tk-photo.et-hero-media { background: #e9ebef !important; }
+@media (max-width: 900px) { html.moderno .tk-hero-copy { order: -1; } html.moderno .tk-hero-grid { display: flex !important; flex-direction: column; } }
+
+/* ── detalles ── */
+html.moderno .et-svc a, html.moderno .et-svc [class*="link"] { color: var(--acc) !important; font-weight: 600 !important; }
+html.moderno .product-card .product-sku, html.moderno .product-card .product-sku * { color: #14171c !important; }
+html.moderno .md-tema svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; }
+html.moderno .md-tema .sol { display: none; } html.moderno.oscuro .md-tema .sol { display: block; } html.moderno.oscuro .md-tema .luna { display: none; }
+
+/* ══ modo oscuro del diseño moderno ══ */
+html.moderno.oscuro, html.moderno.oscuro main, html.moderno.oscuro body { --bg:#0d1117; --bg-2:#11161e; --card:#161b23; --card-2:#1b212b; --card-3:#222a35; --stroke:#262e3a; --stroke-2:#323c4b; --text:#e9edf3; --soft:#b3bcc9; --mute:#8b95a4; color-scheme: dark; }
+html.moderno.oscuro body, html.moderno.oscuro main { background: #0d1117 !important; color: #e9edf3 !important; }
+html.moderno.oscuro .et-header { background: rgba(13,17,23,.9) !important; box-shadow: 0 1px 0 #262e3a !important; }
+html.moderno.oscuro .et-word b, html.moderno.oscuro .tk-hero h1, html.moderno.oscuro .et-sec-head h2, html.moderno.oscuro .et-svc h3, html.moderno.oscuro .et-stats b, html.moderno.oscuro .et-reg-copy h2, html.moderno.oscuro .et-faq-side h2 { color: #f3f5f8 !important; }
+html.moderno.oscuro .et-nav a, html.moderno.oscuro .et-nav button { color: #d6dbe3 !important; }
+html.moderno.oscuro .et-nav a:hover, html.moderno.oscuro .et-nav a.nav-active { background: rgba(242,106,16,.14) !important; color: #ff9a55 !important; }
+html.moderno.oscuro .et-icon-btn { background: #1b212b !important; color: #e9edf3 !important; } html.moderno.oscuro .et-icon-btn svg { stroke: #e9edf3 !important; }
+html.moderno.oscuro .et-btn--ghost { background: #161b23 !important; border-color: #323c4b !important; color: #e9edf3 !important; }
+html.moderno.oscuro .tk-hero { background: radial-gradient(1100px 480px at 88% -8%, rgba(242,106,16,.18) 0%, rgba(242,106,16,0) 62%), #0d1117 !important; }
+html.moderno.oscuro .tk-hero-copy > p, html.moderno.oscuro .et-sec-head p, html.moderno.oscuro .et-svc p, html.moderno.oscuro .et-reg-copy p, html.moderno.oscuro .et-faq-side p, html.moderno.oscuro .et-checks li { color: #b3bcc9 !important; }
+html.moderno.oscuro .md-buscar { background: #161b23; border-color: #ff8c3a; box-shadow: 0 18px 40px -24px rgba(0,0,0,.8); }
+html.moderno.oscuro .md-buscar input { color: #f3f5f8; } html.moderno.oscuro .md-buscar svg { stroke: #e9edf3; }
+html.moderno.oscuro .md-rapidos button { background: #161b23; border-color: #323c4b; color: #d6dbe3; }
+html.moderno.oscuro .tk-plate, html.moderno.oscuro .tk-plate-foot { background: #161b23 !important; }
+html.moderno.oscuro .tk-tabs button:not(.is-on) { background: #222a35 !important; color: #c3cad5 !important; }
+html.moderno.oscuro .tk-tabs button.is-on { background: #f26a10 !important; }
+html.moderno.oscuro .et-stats > div, html.moderno.oscuro .et-brand-grid > *, html.moderno.oscuro .et-svc, html.moderno.oscuro .et-card, html.moderno.oscuro .reg-form, html.moderno.oscuro .faq-list > *, html.moderno.oscuro .product-card { background: #161b23 !important; border-color: #262e3a !important; color: #e9edf3 !important; box-shadow: none !important; }
+html.moderno.oscuro .catalog-section { background: #11161e !important; border-color: #262e3a !important; }
+html.moderno.oscuro .et-search, html.moderno.oscuro .catalog-search, html.moderno.oscuro .faq-search, html.moderno.oscuro .reg-form input, html.moderno.oscuro .reg-form select, html.moderno.oscuro .reg-form textarea { background: #0d1117 !important; border-color: #323c4b !important; color: #e9edf3 !important; }
+html.moderno.oscuro .et-search input { color: #e9edf3 !important; }
+html.moderno.oscuro .filter-chip { background: #161b23 !important; border-color: #323c4b !important; color: #d6dbe3 !important; }
+html.moderno.oscuro .filter-chip.is-active { background: #f26a10 !important; border-color: #f26a10 !important; color: #fff !important; }
+html.moderno.oscuro .scan-camera-btn { background: #161b23 !important; color: #e9edf3 !important; border-color: #323c4b !important; }
+html.moderno.oscuro .product-card, html.moderno.oscuro .product-card h3, html.moderno.oscuro .product-card [class*="title"], html.moderno.oscuro .product-card .product-sku, html.moderno.oscuro .product-card .product-sku * { color: #f3f5f8 !important; }
+html.moderno.oscuro .product-visual { background: #eef0f3 !important; }
+html.moderno.oscuro .reg-form label { color: #d6dbe3 !important; }
+html.moderno.oscuro #splash { background: #0d1117 !important; } html.moderno.oscuro #splash b { color: #fff !important; }
+
+/* ══ efectos: slider suave, aparición, brillo ══ */
+html.moderno .tk-photo { position: relative; overflow: hidden; }
+html.moderno .tk-photo img { transition: opacity 1.1s cubic-bezier(.22,1,.36,1), transform 7.5s linear, filter 1.1s !important; transform: scale(1.12); filter: saturate(.9) blur(2px); }
+html.moderno .tk-photo img.is-on { transform: scale(1.0); filter: none; }
+html.moderno .md-flecha { position: absolute; top: 50%; z-index: 3; width: 46px; height: 46px; margin-top: -23px; border-radius: 50%; border: 0; background: rgba(255,255,255,.88); color: #14171c; display: grid; place-items: center; cursor: pointer; opacity: 0; transition: opacity .3s, transform .3s; box-shadow: 0 10px 24px -10px rgba(0,0,0,.5); }
+html.moderno .md-flecha svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.4; }
+html.moderno .md-flecha.izq { left: 14px; transform: translateX(-8px); } html.moderno .md-flecha.der { right: 14px; transform: translateX(8px); }
+html.moderno .tk-photo:hover .md-flecha { opacity: 1; transform: none; }
+@media (hover: none) { html.moderno .md-flecha { opacity: .9; transform: none; } }
+html.moderno .md-progreso { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(255,255,255,.25); z-index: 3; }
+html.moderno .md-progreso i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #f26a10, #ffb37a); transform-origin: left; animation: mdProg 7s linear forwards; }
+@keyframes mdProg { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+html.moderno .tk-plate { transition: transform .35s cubic-bezier(.22,1,.36,1), box-shadow .35s !important; will-change: transform; }
+html.moderno .tk-tabs button { transition: background .25s, color .25s, transform .2s !important; } html.moderno .tk-tabs button:hover { transform: translateY(-1px); }
+
+/* título de la portada: entrada escalonada y brillo en "europeos" */
+html.moderno .tk-hero h1 > * { display: inline-block; animation: mdSube .9s cubic-bezier(.22,1,.36,1) both; }
+html.moderno .tk-hero h1 > *:nth-child(2) { animation-delay: .08s; } html.moderno .tk-hero h1 > *:nth-child(3) { animation-delay: .16s; }
+html.moderno .tk-hero h1 em { background: linear-gradient(100deg, #f26a10 20%, #ffc08f 45%, #f26a10 70%); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent !important; animation: mdSube .9s .16s cubic-bezier(.22,1,.36,1) both, mdBrillo 4.5s 1.2s ease-in-out infinite; }
+@keyframes mdSube { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+@keyframes mdBrillo { 0%,100% { background-position: 100% 0; } 50% { background-position: 0 0; } }
+html.moderno .tk-hero-copy > p, html.moderno .md-buscar, html.moderno .md-rapidos, html.moderno .et-hero-links, html.moderno .tk-plate { animation: mdSube 1s cubic-bezier(.22,1,.36,1) both; }
+html.moderno .tk-hero-copy > p { animation-delay: .25s; } html.moderno .md-buscar { animation-delay: .35s; } html.moderno .md-rapidos { animation-delay: .45s; } html.moderno .et-hero-links { animation-delay: .55s; } html.moderno .tk-plate { animation-delay: .2s; }
+html.moderno .md-buscar:focus-within { border-color: #f26a10; box-shadow: 0 0 0 6px rgba(242,106,16,.15), 0 18px 40px -24px rgba(20,23,28,.45); transition: .25s; }
+
+/* aparición al bajar */
+html.moderno .md-rev { opacity: 0; transform: translateY(24px); transition: opacity .8s cubic-bezier(.22,1,.36,1) var(--d,0ms), transform .8s cubic-bezier(.22,1,.36,1) var(--d,0ms); }
+html.moderno .md-rev.md-in { opacity: 1; transform: none; }
+
+/* brillo que sigue al ratón */
+html.moderno .product-card, html.moderno .et-svc, html.moderno .et-stats > div, html.moderno .et-brand-grid > * { position: relative; overflow: hidden; }
+html.moderno .product-card::after, html.moderno .et-svc::after, html.moderno .et-stats > div::after, html.moderno .et-brand-grid > *::after { content: ''; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .3s;
+  background: radial-gradient(260px circle at var(--mx,50%) var(--my,50%), rgba(242,106,16,.13), transparent 60%); }
+html.moderno .product-card:hover::after, html.moderno .et-svc:hover::after, html.moderno .et-stats > div:hover::after, html.moderno .et-brand-grid > *:hover::after { opacity: 1; }
+html.moderno .product-card .product-visual img { transition: transform .5s cubic-bezier(.22,1,.36,1) !important; } html.moderno .product-card:hover .product-visual img { transform: scale(1.06); }
+html.moderno .et-btn--accent { position: relative; overflow: hidden; }
+html.moderno .et-btn--accent::after { content: ''; position: absolute; top: 0; left: -60%; width: 40%; height: 100%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.45), transparent); transform: skewX(-20deg); transition: left .6s; }
+html.moderno .et-btn--accent:hover::after { left: 120%; }
+
+/* encabezado compacto al bajar */
+html.moderno .et-header .et-bar { transition: min-height .3s; } html.moderno .et-header.md-chico .et-bar { min-height: 60px; }
+html.moderno .et-header.md-chico .et-topbar { display: none !important; }
+@media (prefers-reduced-motion: reduce) { html.moderno *, html.moderno *::after { animation: none !important; transition: none !important; } html.moderno .md-rev { opacity: 1; transform: none; } }

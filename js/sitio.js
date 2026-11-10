@@ -521,7 +521,9 @@ function puntos(key) {
 }
 function portada() {
   const hb = $('#heroHots'); if (hb) hb.addEventListener('click', e => { const b = e.target.closest('[data-sis]'); if (b) { e.stopPropagation(); EPC.abrir($('#heroChasis').value, b.dataset.sis); } });
-  const hm = $('#heroMedia'); if (hm) { hm.style.cursor = 'pointer'; hm.title = tr2('Toca el camión para verlo en 3D', 'Tap the truck to see it in 3D'); hm.addEventListener('click', e => { if (e.target.closest('a,button,[data-sis]')) return; EPC.abrir($('#heroChasis') ? $('#heroChasis').value : ''); }); }
+  document.querySelectorAll('.md-rapidos [data-q]').forEach(b => b.addEventListener('click', () => { const i = $('#catalogSearch'); i.value = b.dataset.q; i.dispatchEvent(new Event('input', { bubbles: true })); $('#catalogo').scrollIntoView({ behavior: 'smooth' }); }));
+  if (window.ET_EPC === false) { const hb2 = $('#heroHots'); if (hb2) hb2.remove(); }
+  else { const hm = $('#heroMedia'); if (hm) { hm.style.cursor = 'pointer'; hm.title = tr2('Toca el camión para verlo en 3D', 'Tap the truck to see it in 3D'); hm.addEventListener('click', e => { if (e.target.closest('a,button,[data-sis]')) return; EPC.abrir($('#heroChasis') ? $('#heroChasis').value : ''); }); } }
   const imgs = [...document.querySelectorAll('#heroMedia img')], tabs = [...document.querySelectorAll('#heroTabs button')]; if (!imgs.length) return;
   let i = 0, tm = null;
   const ver = k => { i = (k + imgs.length) % imgs.length; const key = imgs[i].dataset.truck;
@@ -532,6 +534,40 @@ function portada() {
   tabs.forEach((t, k) => t.addEventListener('click', () => { ver(k); auto(); }));
   setTimeout(() => imgs.forEach(im => { im.loading = 'eager'; }), 2500);
   ver(0); auto();
+}
+/* Efectos del diseño moderno: slider suave con flechas y deslizar, aparición al bajar, contadores y brillo que sigue el ratón */
+function efectos() {
+  const quieto = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // slider: flechas, barra de progreso, deslizar con el dedo
+  const media = $('#heroMedia'), tabs = [...document.querySelectorAll('#heroTabs button')];
+  if (media && tabs.length) {
+    const ir = d => { const k = tabs.findIndex(t => t.classList.contains('is-on')); tabs[(k + d + tabs.length) % tabs.length].click(); };
+    const fl = (cls, d, txt) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'md-flecha ' + cls; b.setAttribute('aria-label', txt); b.innerHTML = '<svg viewBox="0 0 24 24"><path d="' + (d < 0 ? 'M15 5l-7 7 7 7' : 'M9 5l7 7-7 7') + '"/></svg>'; b.addEventListener('click', e => { e.stopPropagation(); ir(d); }); media.appendChild(b); };
+    fl('izq', -1, 'Anterior'); fl('der', 1, 'Siguiente');
+    const barra = document.createElement('div'); barra.className = 'md-progreso'; barra.innerHTML = '<i></i>'; media.appendChild(barra);
+    const reinicia = () => { const i = barra.firstChild; i.style.animation = 'none'; void i.offsetWidth; i.style.animation = ''; };
+    tabs.forEach(t => t.addEventListener('click', reinicia)); new MutationObserver(reinicia).observe(tabs[0].parentNode, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    let x0 = null; media.addEventListener('pointerdown', e => { x0 = e.clientX; }); media.addEventListener('pointerup', e => { if (x0 != null && Math.abs(e.clientX - x0) > 45) ir(e.clientX < x0 ? 1 : -1); x0 = null; });
+    // inclinación suave de la foto con el ratón
+    const plate = document.querySelector('.tk-plate');
+    if (plate && !quieto) { plate.addEventListener('pointermove', e => { const r = plate.getBoundingClientRect(), x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5; plate.style.transform = `perspective(1200px) rotateY(${x * 5}deg) rotateX(${-y * 4}deg)`; });
+      plate.addEventListener('pointerleave', () => { plate.style.transform = ''; }); }
+  }
+  // aparición al bajar
+  const obj = document.querySelectorAll('.et-sec-head, .et-stats > div, .et-svc, .et-brand-grid > *, .et-reg-copy, .reg-form, .et-faq-side, .faq-main, .catalog-toolbar, .filter-row');
+  obj.forEach((el, k) => { el.classList.add('md-rev'); el.style.setProperty('--d', (k % 4) * 80 + 'ms'); });
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('md-in'); io.unobserve(e.target); } }), { threshold: .12 });
+  obj.forEach(el => io.observe(el));
+  // las tarjetas de piezas también aparecen al cargarse
+  const grid = $('#productGrid');
+  if (grid) { const marca = () => grid.querySelectorAll('.product-card:not(.md-rev)').forEach((c, k) => { c.classList.add('md-rev'); c.style.setProperty('--d', (k % 5) * 60 + 'ms'); io.observe(c); }); marca(); new MutationObserver(marca).observe(grid, { childList: true }); }
+  // contadores de la franja de datos
+  document.querySelectorAll('.et-stats b').forEach(b => { const m = b.textContent.match(/^([\d.]+)(\+?)$/); if (!m || quieto) return; const fin = Number(m[1].replace(/\./g, '')), suf = m[2];
+    const o = new IntersectionObserver(es => { if (!es[0].isIntersecting) return; o.disconnect(); const t0 = performance.now(); const paso = t => { const k = Math.min(1, (t - t0) / 1400), v = Math.round(fin * (1 - Math.pow(1 - k, 3))); b.textContent = v.toLocaleString('es-DO').replace(/,/g, '.') + suf; if (k < 1) requestAnimationFrame(paso); }; requestAnimationFrame(paso); }); o.observe(b); });
+  // brillo que sigue al ratón en tarjetas y botones
+  if (!quieto) document.addEventListener('pointermove', e => { const el = e.target.closest && e.target.closest('.product-card, .et-svc, .et-stats > div, .et-brand-grid > *, .et-btn--accent'); if (!el) return; const r = el.getBoundingClientRect(); el.style.setProperty('--mx', (e.clientX - r.left) + 'px'); el.style.setProperty('--my', (e.clientY - r.top) + 'px'); }, { passive: true });
+  // encabezado más compacto al bajar
+  const hd = $('#etHeader'); if (hd) addEventListener('scroll', () => hd.classList.toggle('md-chico', scrollY > 40), { passive: true });
 }
 function piezas3d() {
   const el = $('#sys3d'); if (!el) return; let v = null;
@@ -560,9 +596,72 @@ function formularios() {
   // inicio de sesión: casilla dentro del cuadro de acceso
 }
 
+
+/* ───────── diseño "pro": categorías en mosaico, destacadas, buscador con pestañas ───────── */
+const PRO_DEST = ['1.19150', '2.22050', '4.00639', '1.10837', '9.69080', '1.10227', '1.10991'];
+const PRO_CATS = [ // [sistema, foto/estilo, descripción es, descripción en]
+  ['Sistema de freno', 'big', 'Discos, pastillas, cilindros, válvulas y más.', 'Discs, pads, cylinders, valves and more.'],
+  ['Motor', '', 'Juntas, turbos, bombas, filtros', 'Gaskets, turbos, pumps, filters'],
+  ['Suspensión', 'o', 'Ballestas, amortiguadores, bujes', 'Leaf springs, shocks, bushings'],
+  ['Sistema eléctrico', 'd', 'Faros, pilotos, sensores', 'Headlights, tail lights, sensors'],
+  ['Caja de cambios', '', 'Sincronizadores, selectores, juntas', 'Synchros, selectors, seals'],
+  ['Embrague y pedal', '', 'Discos, platos, collarines', 'Discs, pressure plates, bearings'],
+  ['Sistema de refrigeración', 'd', 'Radiadores, bombas de agua, termostatos', 'Radiators, water pumps, thermostats'],
+  ['Ejes', 'o', 'Diferenciales, coronas, semiejes', 'Differentials, crown gears, half shafts'],
+];
+function proCats() {
+  const box = $('#proCats'); if (!box) return;
+  const cnt = {}; for (const p of window.__etProducts()) { const k = sistemaDe(p); cnt[k] = (cnt[k] || 0) + 1; }
+  const ic = Object.fromEntries(SIS.map(x => [x[0], x[2]]));
+  const lista = PRO_CATS.filter(c => cnt[c[0]]);
+  box.innerHTML = lista.map(([k, est, de, en]) => `<button type="button" class="pro-cat ${est}" data-sis="${esc(k)}">${est === 'big' ? '<img src="/img/sitio/0237f75084fc.jpg" alt="" loading="lazy">' : `<span class="ic">${icono(ic[k] || '')}</span>`}<span class="n">${cnt[k].toLocaleString('es-DO')} ${tr2('piezas', 'parts')}</span><h3>${esc(tr2(k, SIS_EN[k] || k))}</h3><p>${esc(tr2(de, en))}</p><span class="go">→</span></button>`).join('');
+  box.onclick = e => { const b = e.target.closest('[data-sis]'); if (b) proSistema(b.dataset.sis); };
+}
+function proSistema(k) {
+  window.__etSis = k ? (p => sistemaDe(p) === k) : null;
+  const chip = $('#proSisChip');
+  if (chip) { chip.hidden = !k; chip.innerHTML = k ? `<span>${tr2('Sistema:', 'System:')}</span><button type="button">${esc(tr2(k, SIS_EN[k] || k))} ✕</button>` : ''; chip.onclick = e => { if (e.target.closest('button')) proSistema(null); }; }
+  if (typeof visibleCount !== 'undefined') { try { visibleCount = PAGE_SIZE; } catch (e) {} }
+  if (typeof renderProducts === 'function') renderProducts();
+  if (k) $('#catalogo').scrollIntoView({ behavior: 'smooth' });
+}
+function proDest() {
+  const box = $('#proDest'); if (!box) return;
+  const P = window.__etProducts(), por = new Map(P.map(p => [p.ref, p]));
+  const lista = PRO_DEST.map(r => por.get(r)).filter(Boolean);
+  for (const p of P) { if (lista.length >= 8) break; if (!lista.includes(p) && p.img && (typeof getInv === 'function' ? getInv(p.ref).stock > 0 : false)) lista.push(p); }
+  for (const p of P) { if (lista.length >= 8) break; if (!lista.includes(p) && p.img && /\.webp$/.test(p.img)) lista.push(p); }
+  const pinta = () => { box.innerHTML = lista.slice(0, 8).map(p => { const st = typeof getInv === 'function' ? Number(getInv(p.ref).stock) || 0 : 0;
+    return `<article class="pro-pz pro-rev pro-in"><button type="button" class="pro-pz-img" data-zoom="${esc(p.ref)}" aria-label="${esc(p.title)}"><img src="${esc(p.img)}" alt="" loading="lazy" onerror="this.style.opacity=.2"></button><div class="pro-pz-b"><span class="pro-pz-m">${esc(p.brand || p.marca || '')}</span><h4>${esc(p.title)}</h4><div class="pro-pz-f"><code>${esc(p.ref)}</code>${st > 0 ? `<span class="pro-ok">● ${tr2('En stock', 'In stock')}</span>` : `<span class="pro-ped">● ${tr2('Por pedido', 'On order')}</span>`}</div><button type="button" class="pro-add" data-add="${esc(p.ref)}">${tr2('Agregar al carrito', 'Add to cart')}</button></div></article>`; }).join(''); };
+  pinta(); box._pinta = pinta;
+  box.onclick = e => { const a = e.target.closest('[data-add]'); if (a && typeof addToCart === 'function') { addToCart(a.dataset.add); a.textContent = tr2('✓ Agregado', '✓ Added'); setTimeout(pinta, 1400); return; } const z = e.target.closest('[data-zoom]'); if (z && typeof openZoom === 'function') openZoom(z.dataset.zoom); };
+}
+function proBuscador() {
+  const f = $('#proBuscar'); if (!f) return; const inp = f.q, scan = $('#proScan'); let tab = f.querySelector('.pro-btabs .on');
+  const ph = () => { inp.placeholder = currentLang === 'en' ? tab.dataset.phEn : tab.dataset.ph; scan.hidden = !tab.dataset.scan; };
+  f.querySelectorAll('.pro-btabs button').forEach(b => b.addEventListener('click', () => { tab.classList.remove('on'); tab = b; b.classList.add('on'); ph(); inp.focus(); }));
+  const ir = v => { const i = $('#catalogSearch'); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); $('#catalogo').scrollIntoView({ behavior: 'smooth' }); };
+  f.addEventListener('submit', e => { e.preventDefault(); ir(inp.value.trim()); });
+  scan.addEventListener('click', () => { if (typeof openBarcodeScanner === 'function') openBarcodeScanner(code => { inp.value = code; closeBarcodeScanner(); ir(code); }); });
+  f._ph = ph; ph();
+  document.querySelectorAll('.pro-marcas [data-b]').forEach(b => b.addEventListener('click', () => { const chip = [...document.querySelectorAll('#brandFilters [data-filter]')].find(c => c.dataset.filter === b.dataset.b); $('#catalogo').scrollIntoView({ behavior: 'smooth' }); if (chip) setTimeout(() => chip.click(), 350); }));
+}
+function pro() {
+  if (!document.documentElement.classList.contains('pro')) return;
+  proCats(); proDest(); proBuscador();
+  // aparición al bajar
+  const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('pro-in'); io.unobserve(e.target); } }), { threshold: .12 });
+  document.querySelectorAll('.pro-cab, .pro-cat, .pro-paso, .pro-cta > div, .pro-foto').forEach((el, k) => { el.classList.add('pro-rev'); el.style.setProperty('--d', (k % 4) * 90 + 'ms'); io.observe(el); });
+  // al cambiar idioma: textos que se arman con código
+  const sl = window.setLanguage;
+  if (typeof sl === 'function') window.setLanguage = function (l) { sl.apply(this, arguments); try { document.querySelectorAll('.pro-navx [data-lang]').forEach(b => b.classList.toggle('is-selected', b.dataset.lang === l)); proCats(); const d = $('#proDest'); if (d && d._pinta) d._pinta(); const f = $('#proBuscar'); if (f && f._ph) f._ph(); if (window.__etSis) { const k = $('#proSisChip button'); } const t = document.querySelector('#heroTabs button.is-on'); const key = t && t.dataset.truck; if (key && CAP[key]) { $('#heroBrand').textContent = CAP[key][0]; $('#heroCap').textContent = tr2(CAP[key][1], CAP[key][2]); } } catch (e) { console.error(e); } };
+  // las existencias llegan del servidor después: refresca las destacadas una vez
+  setTimeout(() => { const d = $('#proDest'); if (d && d._pinta) d._pinta(); }, 4000);
+}
+
 window.__etProducts = () => (typeof visibleProducts === 'function' ? visibleProducts() : products);
 function arrancar() {
-  try { EPC.iniciar(); formularios(); rejillas(); encabezado(); portada(); piezas3d(); } catch (e) { console.error('sitio', e); }
+  try { EPC.iniciar(); formularios(); rejillas(); encabezado(); portada(); piezas3d(); efectos(); pro(); } catch (e) { console.error('sitio', e); }
   document.documentElement.classList.add('et-ready');
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('/sw-pagina.js').catch(() => {});
 }
