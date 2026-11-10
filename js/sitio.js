@@ -634,7 +634,7 @@ function proDest() {
   const pinta = () => { box.innerHTML = lista.slice(0, 8).map(p => { const st = typeof getInv === 'function' ? Number(getInv(p.ref).stock) || 0 : 0;
     return `<article class="pro-pz pro-rev pro-in"><button type="button" class="pro-pz-img" data-zoom="${esc(p.ref)}" aria-label="${esc(p.title)}"><img src="${esc(p.img)}" alt="" loading="lazy" onerror="this.style.opacity=.2"></button><div class="pro-pz-b"><span class="pro-pz-m">${esc(p.brand || p.marca || '')}</span><h4>${esc(p.title)}</h4><div class="pro-pz-f"><code>${esc(p.ref)}</code>${st > 0 ? `<span class="pro-ok">● ${tr2('En stock', 'In stock')}</span>` : `<span class="pro-ped">● ${tr2('Por pedido', 'On order')}</span>`}</div><button type="button" class="pro-add" data-add="${esc(p.ref)}">${tr2('Agregar al carrito', 'Add to cart')}</button></div></article>`; }).join(''); };
   pinta(); box._pinta = pinta;
-  box.onclick = e => { const a = e.target.closest('[data-add]'); if (a && typeof addToCart === 'function') { addToCart(a.dataset.add); a.textContent = tr2('✓ Agregado', '✓ Added'); setTimeout(pinta, 1400); return; } const z = e.target.closest('[data-zoom]'); if (z && typeof openZoom === 'function') openZoom(z.dataset.zoom); };
+  box.onclick = e => { const a = e.target.closest('[data-add]'); if (a && typeof addToCart === 'function') { addToCart(a.dataset.add); a.textContent = tr2('✓ Agregado', '✓ Added'); setTimeout(pinta, 1400); return; } const z = e.target.closest('[data-zoom]'); if (!z) return; if (typeof currentUser !== 'undefined' && currentUser && typeof openArticleDetail === 'function') openArticleDetail(z.dataset.zoom); else if (typeof openProductModal === 'function') openProductModal(z.dataset.zoom); };
 }
 function proBuscador() {
   const f = $('#proBuscar'); if (!f) return; const inp = f.q, scan = $('#proScan'); let tab = f.querySelector('.pro-btabs .on');
@@ -646,9 +646,99 @@ function proBuscador() {
   f._ph = ph; ph();
   document.querySelectorAll('.pro-marcas [data-b]').forEach(b => b.addEventListener('click', () => { const chip = [...document.querySelectorAll('#brandFilters [data-filter]')].find(c => c.dataset.filter === b.dataset.b); $('#catalogo').scrollIntoView({ behavior: 'smooth' }); if (chip) setTimeout(() => chip.click(), 350); }));
 }
+
+/* ───────── ficha del artículo (diseño pro): menos cosas, más claras, con gráficos ───────── */
+const fxIc = d => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${d}"/></svg>`;
+function fxApps(txt) { // texto de aplicaciones → filas limpias {modelo, años}
+  const filas = [], vis = new Set();
+  const una = (m, t) => { const y = /(\d{4})\s*-\s*(\d{4})?/.exec(t); const mod = (y ? t.slice(0, y.index) : t).replace(/[\s,–-]+$/, '').trim(); if (!mod || /^scania:\s*\d/i.test(m + mod)) return;
+    const nom = (m ? m + ' ' : '') + mod; const an = y ? y[1] + '–' + (y[2] || tr2('hoy', 'now')) : ''; const k = nom + an; if (!vis.has(k)) { vis.add(k); filas.push({ nom, an }); } };
+  String(txt || '').split(' | ').map(t => t.trim()).filter(Boolean).forEach(t => { const k = t.indexOf(':');
+    if (k > 0) { const pre = t.slice(0, k).trim(), resto = t.slice(k + 1); if (/^\s*[\d\s]+$/.test(resto)) return; resto.split(',').forEach(x => una(pre, x.trim())); } else una('', t); });
+  return filas;
+}
+function fxEstante(locs) { // dibujo del estante con el nivel marcado
+  const L = locs.map(l => { const m = /^([^/]+)\/([^/]+)$/.exec(l); return m ? { t: m[1], e: m[2] } : { t: l, e: '' }; });
+  const prim = L[0]; const n = prim && /^\d+$/.test(prim.e) ? Math.min(Math.max(+prim.e, 1), 6) : 0;
+  const filas = 6, alto = 22; let svg = `<svg class="fx-shelf" viewBox="0 0 150 ${filas * alto + 16}" role="img" aria-label="Estante">`;
+  svg += `<rect x="6" y="4" width="138" height="${filas * alto + 6}" rx="6" class="fx-sh-frame"/>`;
+  for (let i = 0; i < filas; i++) { const nivel = filas - i, y = 8 + i * alto, on = nivel === n;
+    svg += `<rect x="12" y="${y}" width="126" height="${alto - 5}" rx="3" class="${on ? 'fx-sh-on' : 'fx-sh-row'}"/><text x="20" y="${y + 12.5}" class="${on ? 'fx-sh-ton' : 'fx-sh-t'}">${nivel}</text>`;
+    if (on) svg += `<rect x="60" y="${y + 3}" width="34" height="${alto - 11}" rx="2" class="fx-sh-box"/>`; }
+  return svg + '</svg>';
+}
+function fxStock(st) { const v = Math.max(0, Number(st) || 0), pct = Math.min(1, v / 20), r = 34, c = 2 * Math.PI * r;
+  const col = v <= 0 ? 'var(--fx-red)' : v < 3 ? 'var(--fx-amb)' : 'var(--fx-grn)';
+  return `<svg class="fx-ring" viewBox="0 0 84 84"><circle cx="42" cy="42" r="${r}" class="fx-ring-bg"/><circle cx="42" cy="42" r="${r}" stroke="${col}" stroke-dasharray="${c * pct} ${c}" transform="rotate(-90 42 42)" class="fx-ring-v"/><text x="42" y="47" text-anchor="middle" class="fx-ring-n">${v}</text></svg>`;
+}
+function fxCabeza(p, inv, staff) {
+  const locs = typeof allLocations === 'function' ? allLocations(inv) : (inv.location ? [inv.location] : []);
+  const st = Number(inv.stock) || 0; const zebra = typeof getInternalCode === 'function' ? getInternalCode(p.ref) : '';
+  const bar = staff && zebra && typeof code39SvgHtml === 'function' ? code39SvgHtml(zebra) : '';
+  const gt = [...new Set([p.gtin, inv.gtin, ...(Array.isArray(inv.altCodes) ? inv.altCodes : [])].filter(Boolean))];
+  const est = st > 0 ? `<span class="fx-pill ok">● ${tr2('En stock', 'In stock')}</span>` : `<span class="fx-pill no">● ${tr2('Por pedido', 'On order')}</span>`;
+  const dato = (k, v, mono) => v ? `<div class="fx-d"><small>${k}</small><b${mono ? ' class="m"' : ''}>${esc(v)}</b></div>` : '';
+  return `<div class="fx-top">
+    <button type="button" class="fx-img" onclick="openZoom('${esc(p.ref)}')" aria-label="${tr2('Ampliar foto', 'Enlarge photo')}"><img src="${esc(p.img || '')}" alt="${esc(p.title)}" onerror="this.style.opacity=.2"><span class="fx-zoom">${fxIc('M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm9 16-4-4M11 8v6M8 11h6')}</span></button>
+    <div class="fx-info">
+      <div class="fx-chips"><span class="fx-brand">${esc(p.brand || '')}</span>${est}</div>
+      <h2 class="fx-title">${esc(p.title)}</h2>
+      <div class="fx-ref"><small>${tr2('Referencia', 'Reference')}</small><code>${esc(p.ref)}</code><button type="button" class="fx-copy" onclick="navigator.clipboard&&navigator.clipboard.writeText('${esc(p.ref)}');this.textContent='✓'" aria-label="Copiar">⧉</button></div>
+      <div class="fx-datos">${dato(tr2('Fabricante', 'Maker'), p.marca)}${dato(tr2('Categoría', 'Category'), p.cat)}${dato(tr2('Empaque', 'Packaging'), p.pack)}${dato('OE', p.oe, 1)}${staff ? dato('GTIN', gt[0] || tr2('No asignado', 'Not assigned'), 1) : ''}</div>
+    </div>
+  </div>
+  <div class="fx-graf">
+    <div class="fx-card"><div class="fx-ch"><span>${tr2('Existencia', 'Stock')}</span></div><div class="fx-stk">${fxStock(st)}<div><b>${st > 0 ? st + ' ' + tr2('unidades', 'units') : tr2('Sin existencia', 'Out of stock')}</b><small>${st > 0 ? tr2('Listo para despacho hoy', 'Ready to ship today') : tr2('Lo pedimos por ti', 'We can order it')}</small></div></div></div>
+    <div class="fx-card"><div class="fx-ch"><span>${tr2('Ubicación en almacén', 'Warehouse location')}</span></div><div class="fx-loc">${fxEstante(locs)}<div>${locs.length ? locs.map((l, i) => `<b${i ? ' class="x"' : ''}>${esc(formatLocationLabel(l))}</b>`).join('') : `<b class="pend">${tr2('Ubicación pendiente', 'Location pending')}</b>`}<small>${locs.length > 1 ? tr2('Está en ' + locs.length + ' lugares', 'In ' + locs.length + ' places') : ''}</small></div></div></div>
+    ${staff ? `<div class="fx-card fx-zeb"><div class="fx-ch"><span>${tr2('Código Zebra', 'Zebra code')}</span><b>${esc(zebra)}</b></div><div class="fx-bar">${bar}</div><button type="button" class="fx-btn fx-btn-d" data-fxtab="zebra">${fxIc('M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M6 14h12v7H6Z')} ${tr2('Imprimir etiqueta', 'Print label')}</button></div>` : ''}
+  </div>`;
+}
+function fxRefs(p, inv) {
+  const R = [...new Set([...(p.refsList || []), ...((inv && inv.oeRefs) || [])])];
+  const A = fxApps(p.applications);
+  return `${R.length ? `<div class="fx-sec"><h4>${tr2('Referencias cruzadas (OE)', 'Cross references (OE)')} <em>${R.length}</em></h4><div class="fx-tags">${R.map(r => `<span>${esc(r)}</span>`).join('')}</div></div>` : ''}
+  ${A.length ? `<div class="fx-sec"><h4>${tr2('Compatible con', 'Fits')} <em>${A.length}</em></h4><div class="fx-veh">${A.map((a, i) => `<div class="fx-v${i >= 8 ? ' fx-mas' : ''}"><span>${esc(a.nom)}</span>${a.an ? `<i>${esc(a.an)}</i>` : ''}</div>`).join('')}</div>${A.length > 8 ? `<button type="button" class="fx-vermas" onclick="this.previousElementSibling.classList.add('todo');this.remove()">${tr2('Ver los ' + A.length + ' vehículos', 'See all ' + A.length + ' vehicles')}</button>` : ''}</div>` : ''}
+  ${p.specs ? `<div class="fx-sec"><h4>${tr2('Datos técnicos', 'Technical data')}</h4><div class="fx-specs">${String(p.specs).split(' | ').map(x => { const k = x.indexOf(':'); return k > 0 ? `<div><small>${esc(x.slice(0, k))}</small><b>${esc(x.slice(k + 1))}</b></div>` : `<div><b>${esc(x)}</b></div>`; }).join('')}</div></div>` : ''}`;
+}
+function fxMarca() { const m = document.querySelector('.pro-hd .pro-mk'); return `<div class="fx-marca">${m ? m.outerHTML.replace(/etLogoAzul/g, 'etLogoAzulF') : ''}<b>EUROTRUCK</b><small>${tr2('REPUESTOS · SERVICIOS', 'PARTS · SERVICE')}</small></div>`; }
+function fxPublica(ref) {
+  const p = PRODUCTS_BY_REF[ref]; if (!p) return; const inv = getInv(ref);
+  const box = document.getElementById('productDetailContent'); if (!box) return;
+  box.classList.add('fx-box');
+  box.innerHTML = `<button class="fx-x" onclick="closeProductModal()" aria-label="Cerrar">✕</button>${fxMarca()}${fxCabeza(p, inv, false)}${fxRefs(p, inv)}
+    <div class="fx-pie"><button type="button" class="fx-btn fx-btn-o" onclick="addToCart('${esc(ref)}');this.innerHTML='✓ ${tr2('Agregado', 'Added')}'">${fxIc('M3 4h2l2.4 11.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6')} ${tr2('Agregar al carrito', 'Add to cart')}</button>
+    <a class="fx-btn fx-btn-w" href="https://wa.me/18098930258?text=${encodeURIComponent(tr2('Hola, quiero cotizar la pieza ', 'Hi, I want a quote for part ') + p.ref + ' — ' + p.title)}" target="_blank" rel="noopener">${tr2('Cotizar por WhatsApp', 'Quote on WhatsApp')}</a></div>`;
+  document.getElementById('productOverlay').classList.add('is-open');
+}
+let fxTab = 'resumen';
+function fxInterna() { // reorganiza la ficha interna en pestañas, conservando todos sus campos y botones
+  const box = document.getElementById('articleDetailContent'); const ref = typeof articleDetailRef !== 'undefined' ? articleDetailRef : null;
+  if (!box || !ref || !PRODUCTS_BY_REF[ref]) return; const p = PRODUCTS_BY_REF[ref], inv = getInv(ref);
+  box.classList.add('fx-box', 'fx-int');
+  const secs = [...box.querySelectorAll(':scope > .art-section')]; const de = k => secs.filter(x => { const h = (x.querySelector('.art-section-kicker') || {}).textContent || '', t = (x.querySelector('h4') || {}).textContent || ''; return (h + ' ' + t).includes(k); });
+  const grupos = { codigos: [...de('Códigos de barras'), ...de('Referencia o artículo')], zebra: de('Zebra'), precio: de('Costo'), conteo: de('Conteo'), editar: de('Editar') };
+  const acts = box.querySelector('.art-actions-row'); const viejo = [...box.children];
+  const tabs = [['resumen', tr2('Resumen', 'Overview')], ['codigos', tr2('Códigos y referencias', 'Codes & refs')], ['zebra', 'Zebra'], ['precio', tr2('Precio', 'Price')], ['conteo', tr2('Conteo', 'Count')], ['editar', tr2('Editar', 'Edit')]].filter(t => t[0] === 'resumen' || (grupos[t[0]] || []).length);
+  if (!tabs.some(t => t[0] === fxTab)) fxTab = 'resumen';
+  const wrap = document.createElement('div'); wrap.className = 'fx-wrap';
+  wrap.innerHTML = `<button class="fx-x" onclick="closeArticleDetail()" aria-label="Cerrar">✕</button>${fxMarca()}<div class="fx-tabs" role="tablist">${tabs.map(t => `<button type="button" data-fxtab="${t[0]}" class="${t[0] === fxTab ? 'on' : ''}">${t[1]}</button>`).join('')}</div>
+    <div class="fx-pane" data-pane="resumen">${fxCabeza(p, inv, true)}${fxRefs(p, inv)}<div class="fx-pie fx-pie-int"></div></div>`;
+  for (const k of Object.keys(grupos)) { if (!grupos[k].length) continue; const d = document.createElement('div'); d.className = 'fx-pane'; d.dataset.pane = k; grupos[k].forEach(x => d.appendChild(x)); wrap.appendChild(d); }
+  viejo.forEach(n => { if (!secs.includes(n)) n.remove(); });
+  box.prepend(wrap);
+  if (acts) { const pie = wrap.querySelector('.fx-pie-int'); [...acts.children].forEach(b => { if (/Editar/.test(b.textContent)) return; b.className = /Eliminar/.test(b.textContent) ? 'fx-btn fx-btn-del' : 'fx-btn fx-btn-w'; if (/GTIN/.test(b.textContent)) { b.onclick = () => { fxVer('codigos'); setTimeout(() => { const i = document.getElementById('artAddGtinInput'); if (i) i.focus(); }, 50); }; b.removeAttribute('onclick'); } pie.appendChild(b); }); }
+  const ver = k => { fxTab = k; wrap.querySelectorAll('.fx-tabs button').forEach(b => b.classList.toggle('on', b.dataset.fxtab === k)); wrap.querySelectorAll('.fx-pane').forEach(x => x.hidden = x.dataset.pane !== k); };
+  window.fxVer = ver; wrap.addEventListener('click', e => { const b = e.target.closest('[data-fxtab]'); if (b) ver(b.dataset.fxtab); }); ver(fxTab);
+}
+function fxIniciar() {
+  if (typeof openProductModal === 'function') window.openProductModal = fxPublica;
+  const r = window.renderArticleDetail; if (typeof r === 'function') window.renderArticleDetail = function () { r.apply(this, arguments); try { fxInterna(); } catch (e) { console.error('ficha', e); } };
+  const o = window.openArticleDetail; if (typeof o === 'function') window.openArticleDetail = function () { fxTab = 'resumen'; return o.apply(this, arguments); };
+}
+
 function pro() {
   if (!document.documentElement.classList.contains('pro')) return;
-  proCats(); proDest(); proBuscador();
+  proCats(); proDest(); proBuscador(); fxIniciar();
   // aparición al bajar
   const io = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('pro-in'); io.unobserve(e.target); } }), { threshold: .12 });
   document.querySelectorAll('.pro-cab, .pro-cat, .pro-paso, .pro-cta > div, .pro-foto').forEach((el, k) => { el.classList.add('pro-rev'); el.style.setProperty('--d', (k % 4) * 90 + 'ms'); io.observe(el); });

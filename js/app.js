@@ -1650,7 +1650,8 @@ document.getElementById('catalogSearch').addEventListener('input', e=>{
 document.getElementById('productGrid').addEventListener('click', e=>{
   const card = e.target.closest('.product-card');
   if(!card) return;
-  openProductModal(card.dataset.ref);
+  // empleados con sesión: ficha completa (referencias, ubicación, Zebra, códigos); clientes: ficha pública
+  if(currentUser) openArticleDetail(card.dataset.ref); else openProductModal(card.dataset.ref);
 });
 document.getElementById('quickSaleScanInput') && document.getElementById('quickSaleScanInput').addEventListener('keydown', e=>{
   if(e.key==='Enter'){ e.preventDefault(); quickSaleFromBar(); }

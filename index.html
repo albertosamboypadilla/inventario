@@ -1,15 +1,15 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><meta name="theme-color" content="#07080b"><meta name="description" content="Eurotruck: repuestos genuinos y OEM para Scania, Volvo, Mercedes-Benz, MAN, Iveco y DAF. Busca por chasis en 3D, número original o código. Servicio a domicilio 24h en República Dominicana.">
 <link rel="icon" href="/img/icono.svg" type="image/svg+xml">
-<script>window.ET_BUILD='20261109204851';(function(){var d=document.documentElement;setTimeout(function(){d.classList.add('et-ready')},7000);
+<script>window.ET_BUILD='20261109213225';(function(){var d=document.documentElement;setTimeout(function(){d.classList.add('et-ready')},7000);
 try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){if(j&&j.build&&j.build!==window.ET_BUILD&&!sessionStorage.getItem('et_v_'+j.build)){sessionStorage.setItem('et_v_'+j.build,'1');location.reload();}}).catch(function(){});}catch(e){}})();</script>
 </head><body>
 <title>Eurotruck | Repuestos / Servicios</title>
-<script src="/js/vendor/jspdf.umd.min.js?v=20261109204851"></script>
-<link rel="stylesheet" href="/css/base.css?v=20261109204851">
-<link rel="stylesheet" href="/css/eurotruck.css?v=20261109204851">
-<link rel="stylesheet" href="/css/taller.css?v=20261109204851">
-<link rel="stylesheet" href="/css/moderno.css?v=20261109204851">
-<link rel="stylesheet" href="/css/pro.css?v=20261109204851">
+<script src="/js/vendor/jspdf.umd.min.js?v=20261109213225"></script>
+<link rel="stylesheet" href="/css/base.css?v=20261109213225">
+<link rel="stylesheet" href="/css/eurotruck.css?v=20261109213225">
+<link rel="stylesheet" href="/css/taller.css?v=20261109213225">
+<link rel="stylesheet" href="/css/moderno.css?v=20261109213225">
+<link rel="stylesheet" href="/css/pro.css?v=20261109213225">
 
 
 <div id="splash" aria-hidden="true"><div class="sp-logo"><span class="sp-ring"></span><b>EUROTRUCK</b><small>REPUESTOS · SERVICIOS</small></div></div>
@@ -258,6 +258,30 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
   </div>
 </div>
 
+
+<!-- Product detail modal -->
+<div class="overlay" id="productOverlay" onclick="if(event.target===this) closeProductModal()">
+  <div class="modal-box product-detail-box" id="productDetailContent">
+    <button class="modal-close" onclick="closeProductModal()" aria-label="Cerrar">✕</button>
+  </div>
+</div>
+
+<!-- Zoom lightbox -->
+<div class="zoom-overlay" id="zoomOverlay" onclick="closeZoom()">
+  <button class="zoom-close" onclick="event.stopPropagation();closeZoom()" aria-label="Cerrar">✕</button>
+  <img id="zoomImage" src="" alt="" onclick="event.stopPropagation();cycleZoom()">
+  <span class="zoom-hint" data-en="Tap the photo to zoom in / out">Toca la foto para acercar / alejar</span>
+</div>
+
+<!-- Escáner de código de barras con la cámara del celular (o webcam) -->
+<div class="zoom-overlay" id="barcodeScanOverlay" onclick="if(event.target===this) closeBarcodeScanner()">
+  <button class="zoom-close" onclick="closeBarcodeScanner()" aria-label="Cerrar">✕</button>
+  <div class="barcode-scan-box">
+    <video id="barcodeScanVideo" autoplay playsinline muted></video>
+    <div class="barcode-scan-frame"></div>
+  </div>
+  <span class="zoom-hint" id="barcodeScanHint">Apunta la cámara al código de barras</span>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -530,14 +554,14 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
 <!-- ===== Sincronización en la nube (Firebase / Firestore) ===== -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="/js/config.js?v=20261109204851"></script>
+<script src="/js/config.js?v=20261109213225"></script>
 
-<script src="/js/datos/catalogo.js?v=20261109204851"></script>
-<script src="/js/app.js?v=20261109204851"></script>
+<script src="/js/datos/catalogo.js?v=20261109213225"></script>
+<script src="/js/app.js?v=20261109213225"></script>
 
 <!-- TEMA FORJA 3D (solo diseño) -->
 
 
-<script type="importmap">{"imports": {"three": "/js/vendor/three/three.module.min.js?v=20261109204851", "/js/piezas3d.js": "/js/piezas3d.js?v=20261109204851", "/js/vendor/three/RoomEnvironment.js": "/js/vendor/three/RoomEnvironment.js?v=20261109204851", "/js/vendor/three/OrbitControls.js": "/js/vendor/three/OrbitControls.js?v=20261109204851"}}</script>
-<script type="module" src="/js/sitio.js?v=20261109204851"></script>
+<script type="importmap">{"imports": {"three": "/js/vendor/three/three.module.min.js?v=20261109213225", "/js/piezas3d.js": "/js/piezas3d.js?v=20261109213225", "/js/vendor/three/RoomEnvironment.js": "/js/vendor/three/RoomEnvironment.js?v=20261109213225", "/js/vendor/three/OrbitControls.js": "/js/vendor/three/OrbitControls.js?v=20261109213225"}}</script>
+<script type="module" src="/js/sitio.js?v=20261109213225"></script>
 </body></html>
