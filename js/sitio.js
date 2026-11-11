@@ -641,7 +641,7 @@ function proBuscador() {
   const ph = () => { inp.placeholder = currentLang === 'en' ? tab.dataset.phEn : tab.dataset.ph; scan.hidden = !tab.dataset.scan; };
   f.querySelectorAll('.pro-btabs button').forEach(b => b.addEventListener('click', () => { tab.classList.remove('on'); tab = b; b.classList.add('on'); ph(); inp.focus(); }));
   const ir = v => { const i = $('#catalogSearch'); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); $('#catalogo').scrollIntoView({ behavior: 'smooth' }); };
-  f.addEventListener('submit', e => { e.preventDefault(); ir(inp.value.trim()); });
+  f.addEventListener('submit', e => { e.preventDefault(); const v = inp.value.trim(); if (tab.dataset.chasis && window.EPC) { const h = $('#heroChasis'); if (h) h.value = v; EPC.abrir(v); return; } ir(v); });
   scan.addEventListener('click', () => { if (typeof openBarcodeScanner === 'function') openBarcodeScanner(code => { inp.value = code; closeBarcodeScanner(); ir(code); }); });
   f._ph = ph; ph();
   document.querySelectorAll('.pro-marcas [data-b]').forEach(b => b.addEventListener('click', () => { const chip = [...document.querySelectorAll('#brandFilters [data-filter]')].find(c => c.dataset.filter === b.dataset.b); $('#catalogo').scrollIntoView({ behavior: 'smooth' }); if (chip) setTimeout(() => chip.click(), 350); }));

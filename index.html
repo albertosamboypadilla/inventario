@@ -1,15 +1,16 @@
 <!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet"><meta name="theme-color" content="#07080b"><meta name="description" content="Eurotruck: repuestos genuinos y OEM para Scania, Volvo, Mercedes-Benz, MAN, Iveco y DAF. Busca por chasis en 3D, número original o código. Servicio a domicilio 24h en República Dominicana.">
 <link rel="icon" href="/img/icono.svg" type="image/svg+xml">
-<script>window.ET_BUILD='20261109215704';(function(){var d=document.documentElement;setTimeout(function(){d.classList.add('et-ready')},7000);
+<script>window.ET_BUILD='20261111140500';(function(){var d=document.documentElement;setTimeout(function(){d.classList.add('et-ready')},7000);
 try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).then(function(r){return r.ok?r.json():null}).then(function(j){if(j&&j.build&&j.build!==window.ET_BUILD&&!sessionStorage.getItem('et_v_'+j.build)){sessionStorage.setItem('et_v_'+j.build,'1');location.reload();}}).catch(function(){});}catch(e){}})();</script>
+<style>.inv-input-error{outline:2px solid #ef4444!important;background:rgba(239,68,68,.08)!important}</style>
 </head><body>
 <title>Eurotruck | Repuestos / Servicios</title>
-<script src="/js/vendor/jspdf.umd.min.js?v=20261109215704"></script>
-<link rel="stylesheet" href="/css/base.css?v=20261109215704">
-<link rel="stylesheet" href="/css/eurotruck.css?v=20261109215704">
-<link rel="stylesheet" href="/css/taller.css?v=20261109215704">
-<link rel="stylesheet" href="/css/moderno.css?v=20261109215704">
-<link rel="stylesheet" href="/css/pro.css?v=20261109215704">
+<script src="/js/vendor/jspdf.umd.min.js?v=20261111140500"></script>
+<link rel="stylesheet" href="/css/base.css?v=20261111140500">
+<link rel="stylesheet" href="/css/eurotruck.css?v=20261111140500">
+<link rel="stylesheet" href="/css/taller.css?v=20261111140500">
+<link rel="stylesheet" href="/css/moderno.css?v=20261111140500">
+<link rel="stylesheet" href="/css/pro.css?v=20261111140500">
 
 
 <div id="splash" aria-hidden="true"><div class="sp-logo"><span class="sp-ring"></span><b>EUROTRUCK</b><small>REPUESTOS · SERVICIOS</small></div></div>
@@ -57,6 +58,7 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
         <button type="button" class="on" data-ph="Ej: pastillas de freno, filtro de aceite…" data-ph-en="E.g.: brake pads, oil filter…" data-en="Part name">Nombre de la pieza</button>
         <button type="button" data-ph="Ej: 1.19150, 20532237…" data-ph-en="E.g.: 1.19150, 20532237…" data-en="Original no. (OE)">N.º original (OE)</button>
         <button type="button" data-ph="Escribe o escanea el código de barras" data-ph-en="Type or scan the barcode" data-scan="1" data-en="Barcode">Código de barras</button>
+        <button type="button" data-ph="Escribe el chasis o VIN y Enter" data-ph-en="Type the chassis / VIN and Enter" data-chasis="1" data-en="Chassis / VIN">Chasis / VIN</button>
       </div>
       <div class="pro-brow">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -121,7 +123,8 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
   </div>
 </section>
 
-<!-- piezas internas que el código usa (búsqueda por chasis apagada) -->
+<!-- piezas internas que el código usa (búsqueda por chasis) -->
+<input type="hidden" id="heroChasis">
 <section class="et-section et-systems" id="sistemas" hidden><div id="sys3d"></div><div id="sysTip" hidden></div><div id="sysGrid"></div></section>
 <div hidden aria-hidden="true"><div id="brandGrid"></div><div class="marquee-track" id="marqueeTrack"></div></div>
 
@@ -452,11 +455,12 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
         <button class="mini-btn mini-btn--del" onclick="removeActiveArea()">🗑 Eliminar área</button>
         <button class="mini-btn mini-btn--del" onclick="clearActiveCount()">⟲ Borrar conteo</button>
         <div class="inv-area-fields">
-          <label>Tramo<input type="text" id="tramoInput" placeholder="1"></label>
-          <label>Estante<input type="text" id="estanteInput" placeholder="2"></label>
+          <label>Tramo<input type="text" id="tramoInput" placeholder="T04"></label>
+          <label>Estante<input type="text" id="estanteInput" placeholder="2A1"></label>
         </div>
       </div>
       <button class="mini-btn" onclick="addCountArea()">+ Agregar otra área</button>
+      <button class="mini-btn" onclick="organizarUbicaciones()" title="Arma la lista con las ubicaciones de los artículos, ordenada y sin repetidas">⇅ Organizar ubicaciones</button>
     </div>
 
     <div class="inv-section-box">
@@ -554,14 +558,14 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
 <!-- ===== Sincronización en la nube (Firebase / Firestore) ===== -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-<script src="/js/config.js?v=20261109215704"></script>
+<script src="/js/config.js?v=20261111140500"></script>
 
-<script src="/js/datos/catalogo.js?v=20261109215704"></script>
-<script src="/js/app.js?v=20261109215704"></script>
+<script src="/js/datos/catalogo.js?v=20261111140500"></script>
+<script src="/js/app.js?v=20261111140500"></script>
 
 <!-- TEMA FORJA 3D (solo diseño) -->
 
 
-<script type="importmap">{"imports": {"three": "/js/vendor/three/three.module.min.js?v=20261109215704", "/js/piezas3d.js": "/js/piezas3d.js?v=20261109215704", "/js/vendor/three/RoomEnvironment.js": "/js/vendor/three/RoomEnvironment.js?v=20261109215704", "/js/vendor/three/OrbitControls.js": "/js/vendor/three/OrbitControls.js?v=20261109215704"}}</script>
-<script type="module" src="/js/sitio.js?v=20261109215704"></script>
+<script type="importmap">{"imports": {"three": "/js/vendor/three/three.module.min.js?v=20261111140500", "/js/piezas3d.js": "/js/piezas3d.js?v=20261111140500", "/js/vendor/three/RoomEnvironment.js": "/js/vendor/three/RoomEnvironment.js?v=20261111140500", "/js/vendor/three/OrbitControls.js": "/js/vendor/three/OrbitControls.js?v=20261111140500"}}</script>
+<script type="module" src="/js/sitio.js?v=20261111140500"></script>
 </body></html>

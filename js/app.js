@@ -2623,8 +2623,8 @@ function setActiveAreaIndex(idx){
   renderInventoryStats();
 }
 function addCountArea(){
-  countAreas.push({tramo:'', estante:'', counts:{}});
-  activeAreaIndex = countAreas.length-1;
+  const vacia = countAreas.findIndex(a=> !a.tramo && !a.estante && !(a.counts && Object.keys(a.counts).length));
+  if(vacia >= 0) activeAreaIndex = vacia; else { countAreas.push({tramo:'', estante:'', counts:{}}); activeAreaIndex = countAreas.length-1; }
   syncLocationsFromAreas();
   saveMeta();
   renderAreaSelect();
@@ -2637,11 +2637,35 @@ function addCountArea(){
   if(tramoEl){ tramoEl.value=''; tramoEl.focus(); }
   if(estanteEl) estanteEl.value='';
 }
+// Formato de ubicaciones: tramo en mayúsculas sin guiones (T04, T1) y casilla sin guiones (2A1, 2A7 ARRIBA)
+function normTramo(v){ return String(v||'').toUpperCase().replace(/[-_\s]+/g,'').trim(); }
+function normEstante(v){
+  const t = String(v||'').toUpperCase().replace(/\s+/g,' ').trim();
+  const m = /^(.*?)(?:\s+(ARRIBA|ABAJO|IZQUIERDA|DERECHA|IZQ|DER))?$/.exec(t);
+  const base = (m ? m[1] : t).replace(/[-_\s]+/g,'');
+  return m && m[2] ? base + ' ' + m[2] : base;
+}
+function areaKey(tramo, estante){ return normTramo(tramo) + '/' + normEstante(estante); }
+function areaRepetida(tramo, estante, menosIdx){
+  if(!normTramo(tramo) || !normEstante(estante)) return -1;
+  const k = areaKey(tramo, estante);
+  return countAreas.findIndex((a,i)=> i !== menosIdx && a.tramo && a.estante && areaKey(a.tramo, a.estante) === k);
+}
 function commitAreaField(field){
   const el = document.getElementById(field==='tramo' ? 'tramoInput' : 'estanteInput');
   if(!el) return;
   const area = activeArea();
-  area[field] = el.value.trim();
+  const val = field==='tramo' ? normTramo(el.value) : normEstante(el.value);
+  const t = field==='tramo' ? val : area.tramo, e = field==='estante' ? val : area.estante;
+  const rep = areaRepetida(t, e, activeAreaIndex);
+  if(rep >= 0){
+    playErrorSound();
+    showToast(`⚠ Esa ubicación ya existe: ${countAreas[rep].tramo} / ${countAreas[rep].estante}. No se repite: elígela en la lista.`);
+    el.value = area[field] || '';
+    el.classList.add('inv-input-error'); setTimeout(()=>el.classList.remove('inv-input-error'), 2500);
+    return;
+  }
+  area[field] = val; el.value = val;
   syncLocationsFromAreas();
   saveMeta();
   const sel = document.getElementById('areaSelect');
@@ -2649,6 +2673,46 @@ function commitAreaField(field){
     sel.options[activeAreaIndex].textContent = `${area.tramo || '—'} / ${area.estante || '—'}`;
   }
   renderCatalogCards();
+}
+// Arma la lista de "Ubicación activa" con las ubicaciones que tienen los artículos, ordenada y sin repetidas.
+// No cambia la ubicación de ningún artículo y conserva todo lo contado (si dos áreas eran la misma, se suman).
+function organizarUbicaciones(){
+  if(!currentUser || currentUser.role!=='admin'){ showToast('Solo un administrador puede organizar las ubicaciones.'); return; }
+  const nat = (a,b)=> String(a).localeCompare(String(b), 'es', {numeric:true, sensitivity:'base'});
+  const mapa = new Map(), raras = [];
+  const poner = (t, e)=>{ const k = areaKey(t, e); if(!mapa.has(k)) mapa.set(k, {tramo: normTramo(t), estante: normEstante(e), counts:{}, arts:0}); return mapa.get(k); };
+  for(const ref of Object.keys(inventoryState)){
+    if(deletedRefs.includes(ref)) continue;
+    for(const l of allLocations(inventoryState[ref])){
+      const m = /^([^/]+)\/([^/]+)$/.exec(String(l).trim());
+      if(!m || !/^T/i.test(m[1].trim())){ raras.push(`${ref} (${l})`); continue; }
+      poner(m[1], m[2]).arts++;
+    }
+  }
+  const antes = countAreas.length; let juntadas = 0, contadoGuardado = 0; const repetidas = new Set(), vistas = new Set();
+  const activaK = countAreas[activeAreaIndex] ? areaKey(countAreas[activeAreaIndex].tramo, countAreas[activeAreaIndex].estante) : '';
+  for(const a of countAreas){
+    const tiene = a.counts && Object.keys(a.counts).length;
+    if(!normTramo(a.tramo) && !normEstante(a.estante)){ if(tiene) raras.push('área sin nombre con conteo'); else continue; }
+    const k = areaKey(a.tramo, a.estante);
+    if(vistas.has(k)) { repetidas.add(`${normTramo(a.tramo)} / ${normEstante(a.estante)}`); juntadas++; } vistas.add(k);
+    if(!tiene) continue;                         // sin conteo y sin artículos: no hace falta en la lista
+    const d = poner(a.tramo || 'SIN', a.estante || 'SIN');
+    for(const [ref, q] of Object.entries(a.counts)){ d.counts[ref] = (Number(d.counts[ref])||0) + (Number(q)||0); contadoGuardado += Number(q)||0; }
+  }
+  const lista = [...mapa.values()].sort((x,y)=> nat(x.tramo,y.tramo) || nat(x.estante,y.estante));
+  if(!lista.length){ showToast('No encontré ubicaciones en los artículos.'); return; }
+  const msg = `Organizar "Ubicación activa":\n\n• Quedan ${lista.length} ubicaciones (antes había ${antes} en la lista, con vacías y repetidas).\n` +
+    (repetidas.size ? `• Repetidas que se juntan: ${[...repetidas].join(', ')}\n` : '') +
+    `• Lo contado se conserva: ${contadoGuardado} unidad(es).\n• No se cambia la ubicación de ningún artículo.\n` +
+    (raras.length ? `\nSin tramo (no entran a la lista, revísalas): ${raras.slice(0,12).join(', ')}${raras.length>12?'…':''}\n` : '') + `\n¿Continuar?`;
+  if(!confirm(msg)) return;
+  countAreas = lista.map(a=>({tramo:a.tramo, estante:a.estante, counts:a.counts}));
+  activeAreaIndex = Math.max(0, countAreas.findIndex(a=> areaKey(a.tramo,a.estante) === activaK));
+  syncLocationsFromAreas();
+  saveMeta();
+  renderAreaSelect(); renderCountedItemsList(); renderInventoryStats(); renderCatalogCards();
+  showToast(`✓ Ubicaciones organizadas: ${countAreas.length}. Lo contado se conservó.`);
 }
 function removeActiveArea(){
   if(countAreas.length<=1){ showToast('Debe quedar al menos un área de conteo.'); return; }

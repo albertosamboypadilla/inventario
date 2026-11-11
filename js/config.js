@@ -38,7 +38,7 @@ window.FIREBASE_CONFIG = {
 };
 
 /* Búsqueda por chasis (EPC 3D): apagada por ahora. Para volver a encenderla, cambia a true. El código sigue en js/sitio.js. */
-window.ET_EPC = false;
+window.ET_EPC = true;
 document.documentElement.classList.toggle('sin-epc', !window.ET_EPC);
 document.documentElement.classList.add('moderno', 'pro');
 /* Tema: claro por defecto; el botón de la luna lo cambia y se recuerda en este equipo */
