@@ -730,6 +730,15 @@ function fxInterna() { // reorganiza la ficha interna en pestañas, conservando 
   const ver = k => { fxTab = k; wrap.querySelectorAll('.fx-tabs button').forEach(b => b.classList.toggle('on', b.dataset.fxtab === k)); wrap.querySelectorAll('.fx-pane').forEach(x => x.hidden = x.dataset.pane !== k); };
   window.fxVer = ver; wrap.addEventListener('click', e => { const b = e.target.closest('[data-fxtab]'); if (b) ver(b.dataset.fxtab); }); ver(fxTab);
 }
+// "Agregar otro GTIN" → abre la pestaña Códigos y referencias y pone el cursor en la casilla (funciona aunque la ficha se vuelva a pintar)
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('button'); if (!b || !/otro GTIN|another GTIN/i.test(b.textContent || '')) return;
+  const w = b.closest('.fx-wrap') || document.querySelector('#articleDetailContent .fx-wrap'); if (!w || typeof window.fxVer !== 'function') return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  window.fxVer('codigos');
+  const tab = w.querySelector('[data-fxtab="codigos"]'); if (tab) tab.scrollIntoView({ block: 'nearest', inline: 'center' });
+  setTimeout(() => { const i = document.getElementById('artAddGtinInput'); if (i) { i.scrollIntoView({ behavior: 'smooth', block: 'center' }); i.focus({ preventScroll: true }); } }, 60);
+}, true);
 function fxIniciar() {
   if (typeof openProductModal === 'function') window.openProductModal = fxPublica;
   const r = window.renderArticleDetail; if (typeof r === 'function') window.renderArticleDetail = function () { r.apply(this, arguments); try { fxInterna(); } catch (e) { console.error('ficha', e); } };
