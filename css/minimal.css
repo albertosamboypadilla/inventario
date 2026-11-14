@@ -264,3 +264,23 @@ html.pro.min .pro-stats span { display: block; font: 500 13px/1.35 var(--m-f) !i
 html.pro.min .pro-dots { justify-self: end; }
 @media (max-width: 900px) { html.pro.min .pro-stats .et-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } html.pro.min .pro-dots { grid-column: 1 / -1; justify-self: start; } }
 html.pro.min .pro-stats .et-stats { border-top: 0 !important; }
+
+/* ── quitar piezas destacadas y todo lo de abajo (dentro de la página principal) ── */
+html.pro.min #destacados, html.pro.min #servicios, html.pro.min #registro, html.pro.min #faq, html.pro.min main > .pro-cta { display: none !important; }
+html.pro.min .pro-nav a[href="#servicios"], html.pro.min .pro-nav a[href="#faq"] { display: none !important; }
+
+/* ── encabezado con sesión iniciada: nada encimado ── */
+html.pro.min .pro-hd-in { flex-wrap: nowrap; }
+html.pro.min .pro-nav { overflow: hidden; }
+html.pro.min .pro-acc > .pro-lang { display: none !important; }
+html.pro.min #authButton span { display: inline-block !important; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+@media (max-width: 1250px) { html.pro.min #authButton span { display: none !important; } }
+
+/* ── Venta rápida más grande ── */
+html.pro.min .quick-sale-bar { padding: 22px 26px !important; border-radius: 16px !important; gap: 18px !important; flex-wrap: wrap; align-items: center; }
+html.pro.min .quick-sale-label { font: 700 17px var(--m-f) !important; color: #ffb4b4 !important; flex: 1 1 320px; }
+html.pro.min .quick-sale-inputs { gap: 12px !important; flex: 1 1 520px; display: flex !important; }
+html.pro.min .quick-sale-inputs input { height: 54px !important; font: 600 18px var(--m-f) !important; border-radius: 12px !important; padding: 0 16px !important; }
+html.pro.min #quickSaleScanInput { flex: 1 1 auto; min-width: 0; }
+html.pro.min #quickSaleQtyInput { width: 90px !important; flex: none; text-align: center; }
+html.pro.min .quick-sale-inputs .mini-btn--del { height: 54px !important; font: 700 16px var(--m-f) !important; padding: 0 22px !important; border-radius: 12px !important; flex: none; }
