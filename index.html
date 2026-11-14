@@ -11,7 +11,7 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
 <link rel="stylesheet" href="/css/taller.css?v=20261111140500">
 <link rel="stylesheet" href="/css/moderno.css?v=20261111140500">
 <link rel="stylesheet" href="/css/pro.css?v=20261111140500">
-<link rel="stylesheet" href="/css/minimal.css?v=20261113225500">
+<link rel="stylesheet" href="/css/minimal.css?v=20261114091500">
 <script>document.documentElement.classList.add('min')</script>
 
 
@@ -156,12 +156,13 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
     <div class="pro-sischip" id="proSisChip" hidden></div>
     <div class="catalog-meta"><span id="catalogCount">artículos</span><span data-en="Certified stock">Stock certificado</span></div>
     <div class="quick-sale-bar" id="quickSaleBar" style="display:none;">
-      <span class="quick-sale-label">➖ Venta rápida — escanea el código y presiona Enter para descontarlo del inventario</span>
+      <span class="quick-sale-label">➖ Venta rápida — escanea el código, revisa y presiona <b>Enter</b> otra vez para eliminar</span>
       <div class="quick-sale-inputs">
         <input type="text" id="quickSaleScanInput" placeholder="Código, SKU, GTIN o código Zebra" autocomplete="off">
         <input type="number" id="quickSaleQtyInput" min="1" value="1" title="Cantidad a eliminar">
         <button class="mini-btn mini-btn--del" onclick="quickSaleFromBar()">🗑 Eliminar</button>
       </div>
+      <div class="quick-sale-aviso" id="quickSaleAviso" hidden></div>
     </div>
     <div class="product-grid" id="productGrid"></div>
     <div class="empty-catalog" id="emptyCatalog" style="display:none;" data-en="We couldn't find parts matching those filters. Write to us and we'll help you find it.">No encontramos piezas con esos filtros. Escríbenos y te ayudamos a ubicarla.</div>
@@ -564,7 +565,7 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
 <script src="/js/config.js?v=20261111140500"></script>
 
 <script src="/js/datos/catalogo.js?v=20261111140500"></script>
-<script src="/js/app.js?v=20261111140500"></script>
+<script src="/js/app.js?v=20261114091500"></script>
 
 <!-- TEMA FORJA 3D (solo diseño) -->
 

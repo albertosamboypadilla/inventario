@@ -1709,6 +1709,7 @@ document.getElementById('productGrid').addEventListener('click', e=>{
   // empleados con sesión: ficha completa (referencias, ubicación, Zebra, códigos); clientes: ficha pública
   if(currentUser) openArticleDetail(card.dataset.ref); else openProductModal(card.dataset.ref);
 });
+document.getElementById('quickSaleQtyInput') && document.getElementById('quickSaleQtyInput').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); quickSaleFromBar(); } else if(e.key==='Escape') quickSaleCancel(); });
 document.getElementById('quickSaleScanInput') && document.getElementById('quickSaleScanInput').addEventListener('keydown', e=>{
   if(e.key==='Enter'){ e.preventDefault(); quickSaleFromBar(); }
 });
@@ -3344,20 +3345,49 @@ function registerSalida(){
   qtyEl.value = 1;
   showToast(`Salida registrada: -${result.finalQty} — ${result.p.title} → ${result.inv.stock} disp.${lowStockSuffix(result.inv)}`);
 }
+/* Venta rápida en 2 pasos: 1) escanear/escribir + Enter = prepara (no descuenta)  2) Enter otra vez = elimina */
+let quickSalePending = null;
+const qsEsc = v => String(v==null?'':v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function quickSaleAviso(html, tipo){
+  const el = document.getElementById('quickSaleAviso'); if(!el) return;
+  el.innerHTML = html || ''; el.className = 'quick-sale-aviso' + (tipo ? ' is-'+tipo : ''); el.hidden = !html;
+}
+function quickSaleCancel(){ quickSalePending = null; quickSaleAviso(''); }
 function quickSaleFromBar(){
   if(!canQuickSale()) return;
   const codeEl = document.getElementById('quickSaleScanInput');
   const qtyEl = document.getElementById('quickSaleQtyInput');
   if(!codeEl) return;
   const code = (codeEl.value||'').trim();
+  const qty = Math.max(1, Number(qtyEl && qtyEl.value)||1);
+  // paso 2: hay uno preparado y se da Enter (casilla vacía o el mismo código) → eliminar
+  if(quickSalePending && (!code || code === quickSalePending.code)){
+    const pend = quickSalePending; quickSalePending = null;
+    const result = deductStockForSale(pend.code, qty);
+    codeEl.value = ''; codeEl.focus();
+    if(!result){ quickSaleAviso(''); return; }
+    playAddSound();
+    quickSaleAviso('');
+    quickSaleEliminado(result);
+    showToast(`Venta registrada: -${result.finalQty} — ${result.p.title} → ${result.inv.stock} disp.${lowStockSuffix(result.inv)}`);
+    return;
+  }
   if(!code) return;
-  const qty = Number(qtyEl.value)||1;
-  const result = deductStockForSale(code, qty);
-  codeEl.value = '';
-  codeEl.focus();
-  if(!result) return;
-  playAddSound();
-  showToast(`Venta registrada: -${result.finalQty} — ${result.p.title} → ${result.inv.stock} disp.${lowStockSuffix(result.inv)}`);
+  // paso 1: preparar
+  const p = findProductByCode(code);
+  codeEl.value = ''; codeEl.focus();
+  if(!p){ playErrorSound(); quickSalePending = null; quickSaleAviso('❌ Código no encontrado: <b>'+qsEsc(code)+'</b>', 'error'); return; }
+  const stock = Number(getInv(p.ref).stock)||0;
+  if(stock<=0){ playErrorSound(); quickSalePending = null; quickSaleAviso('⛔ <b>'+qsEsc(p.title)+'</b> ('+qsEsc(p.ref)+') no tiene stock.', 'error'); return; }
+  quickSalePending = { code, ref: p.ref };
+  quickSaleAviso('👉 <b>'+qsEsc(p.title)+'</b> · '+qsEsc(p.ref)+' · '+stock+' disp. — eliminar <b>'+Math.min(qty,stock)+'</b>: presiona <kbd>Enter</kbd> para confirmar <button type="button" onclick="quickSaleCancel()">Cancelar</button>', 'listo');
+}
+function quickSaleEliminado(r){
+  let o = document.getElementById('quickSaleBig');
+  if(!o){ o = document.createElement('div'); o.id = 'quickSaleBig'; o.onclick = () => o.classList.remove('is-on'); document.body.appendChild(o); }
+  o.innerHTML = '<div><b>ELIMINADO</b><span>-'+r.finalQty+' · '+qsEsc(r.p.title)+'</span><small>'+qsEsc(r.p.ref)+' · quedan '+r.inv.stock+'</small></div>';
+  o.classList.remove('is-on'); void o.offsetWidth; o.classList.add('is-on');
+  clearTimeout(o._t); o._t = setTimeout(() => o.classList.remove('is-on'), 2200);
 }
 
 /* ---------- Estadísticas ---------- */

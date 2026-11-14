@@ -299,3 +299,19 @@ html.pro.min:not(.oscuro) .quick-sale-label { color: #b42318 !important; }
 html.pro.min:not(.oscuro) .quick-sale-inputs input { background: #fff !important; color: #0b1526 !important; border: 1px solid #f3b4b4 !important; }
 html.pro.min:not(.oscuro) .pro-buscar { box-shadow: 0 1px 2px rgba(11,21,38,.06), 0 14px 30px -18px rgba(11,21,38,.3) !important; }
 html.pro.min:not(.oscuro) .pro-ft, html.pro.min:not(.oscuro) .pro-marcas { background: var(--m-bg) !important; }
+
+/* ── Venta rápida: aviso del artículo preparado y ELIMINADO en grande ── */
+.quick-sale-aviso { flex: 1 1 100%; margin-top: 4px; padding: 14px 18px; border-radius: 12px; font: 600 16px/1.45 Inter, system-ui, sans-serif; }
+.quick-sale-aviso.is-listo { background: #fff6d6; color: #5a4300; border: 2px solid #f2b600; }
+.quick-sale-aviso.is-error { background: #ffe3e3; color: #9b1c1c; border: 2px solid #f19999; }
+html.oscuro .quick-sale-aviso.is-listo { background: rgba(255,195,0,.12); color: #ffe08a; border-color: #ffc300; }
+html.oscuro .quick-sale-aviso.is-error { background: rgba(220,38,38,.15); color: #fecaca; border-color: #ef4444; }
+.quick-sale-aviso kbd { display: inline-block; padding: 1px 8px; border-radius: 6px; border: 1px solid currentColor; font: 700 14px ui-monospace, Consolas, monospace; }
+.quick-sale-aviso button { margin-left: 10px; padding: 4px 12px; border-radius: 8px; border: 1px solid currentColor; background: transparent; color: inherit; font: 600 13px inherit; cursor: pointer; }
+#quickSaleBig { position: fixed; inset: 0; z-index: 99999; display: grid; place-items: center; background: rgba(5,10,20,.55); opacity: 0; pointer-events: none; transition: opacity .18s; }
+#quickSaleBig.is-on { opacity: 1; pointer-events: auto; }
+#quickSaleBig > div { background: #dc2626; color: #fff; border-radius: 28px; padding: 36px 64px; text-align: center; box-shadow: 0 30px 80px -20px rgba(0,0,0,.6); transform: scale(.85); transition: transform .25s cubic-bezier(.2,1.4,.4,1); max-width: 90vw; }
+#quickSaleBig.is-on > div { transform: scale(1); }
+#quickSaleBig b { display: block; font: 900 clamp(48px, 9vw, 110px)/1 Inter, system-ui, sans-serif; letter-spacing: .02em; }
+#quickSaleBig span { display: block; margin-top: 14px; font: 700 clamp(18px, 2.4vw, 26px)/1.3 Inter, system-ui, sans-serif; }
+#quickSaleBig small { display: block; margin-top: 6px; font: 500 16px Inter, system-ui, sans-serif; opacity: .85; }
