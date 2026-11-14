@@ -1011,6 +1011,7 @@ function openDetail(ref){
   const money = x=> x === '' || x == null ? '—' : 'US$ ' + Number(x).toLocaleString('es-DO', {minimumFractionDigits:2, maximumFractionDigits:2});
   $('sheetIn').innerHTML = `<img src="${esc(imgOf(p).replace('width=240','width=600'))}" onerror="this.src='${PH}'">
     <h3 style="margin:12px 0 2px">${esc(p.title)}</h3><div class="mut">${esc(p.brand)} · ${esc(p.cat)} · ${esc(ref)}</div>
+    <div class="locbig${(Number(row.stock)||0) > 0 ? '' : ' none'}"><span>${(Number(row.stock)||0) > 0 ? '✅' : '⛔'}</span><div><small>DISPONIBILIDAD</small><b>${(Number(row.stock)||0) > 0 ? 'Disponible' : 'Agotado'}</b></div><div class="st"><small>DISPONIBLE</small><b>${Number(row.stock)||0}</b></div></div>
     <div class="locbig${row.location ? '' : ' none'}"><span>📍</span><div><small>UBICACIÓN</small><b>${locsOf(row).length ? locsOf(row).map(l=>esc(locLabel(l))).join('<br>') : esc(locLabel(''))}</b></div><div class="st"><small>STOCK</small><b>${Number(row.stock)||0}</b></div></div>
     <table>
       <tr><td>Referencia / SKU</td><td><b>${esc(ref)}</b></td></tr>
