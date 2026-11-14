@@ -333,7 +333,7 @@ function hasLongerCode(code){
   for(let i = lo; i < CODES_SORTED.length && CODES_SORTED[i].startsWith(lc); i++) if(CODES_SORTED[i].length > lc.length) return true;
   return false;
 }
-function imgOf(p){ if(p && p.img) return p.img; return `https://dieseltechnic.tiny.pictures/0355/${String(p.ref).replace(/\./g,'_')}_0.jpg?format=webp&width=240`; }
+function imgOf(p){ if(p && p.img === '__srv__') return cfg.url + '/api/' + APP + '/foto/' + encodeURIComponent(p.ref); if(p && p.img) return p.img; return `https://dieseltechnic.tiny.pictures/0355/${String(p.ref).replace(/\./g,'_')}_0.jpg?format=webp&width=240`; }
 const locLabel = l=>{ if(!l) return 'Pendiente'; const m = /^([^/]+)\/([^/]+)$/.exec(l); return m ? `Tramo ${m[1]} · Estante ${m[2]}` : l; };
 const PH = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56"><rect width="56" height="56" fill="#e5e7eb"/><path d="M16 36l8-10 6 7 4-5 6 8z" fill="#9ca3af"/></svg>');
 
@@ -511,7 +511,8 @@ async function pull(){
   if(!cfg.token) return;
   if(pulling){ pullAgain = true; return; } pulling = true;
   try{
-    const inv = await api('GET', '/inventario?desde=' + (cache.seqInv||0));
+    if(!cache.ligero){ cache.inv = {}; cache.seqInv = -1; cache.seqDocs = -1; cache.ligero = 1; }   // una vez: bajar todo de nuevo, ya sin fotos pesadas
+    const inv = await api('GET', '/inventario?ligero=1&desde=' + (cache.seqInv||0));
     for(const r of inv.rows){ if(r.deleted) delete cache.inv[r.id]; else cache.inv[r.id] = r.data; }
     cache.seqInv = inv.seq;
     const docs = await api('GET', '/docs?desde=' + (cache.seqDocs||0));
