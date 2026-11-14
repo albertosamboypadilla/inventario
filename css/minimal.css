@@ -284,3 +284,18 @@ html.pro.min .quick-sale-inputs input { height: 54px !important; font: 600 18px 
 html.pro.min #quickSaleScanInput { flex: 1 1 auto; min-width: 0; }
 html.pro.min #quickSaleQtyInput { width: 90px !important; flex: none; text-align: center; }
 html.pro.min .quick-sale-inputs .mini-btn--del { height: 54px !important; font: 700 16px var(--m-f) !important; padding: 0 22px !important; border-radius: 12px !important; flex: none; }
+
+/* ══ modo CLARO (botón sol/luna): mismo diseño azul + amarillo sobre fondo claro ══ */
+html.pro.min:not(.oscuro) {
+  --m-bg:#f4f6fa; --m-card:#ffffff; --m-tile:#eaeef5; --m-tx:#0b1526; --m-mute:#56657c; --m-line:#dbe1ea;
+  --m-a:#e6a800; --m-a2:#f2b600; --m-asoft:rgba(242,182,0,.14);
+}
+html.pro.min:not(.oscuro) .pro-hero h1 em, html.pro.min:not(.oscuro) .pro-k, html.pro.min:not(.oscuro) .pro-stats .et-stats b { }
+html.pro.min:not(.oscuro) .pro-hero h1 em, html.pro.min:not(.oscuro) .pro-k { color: #c48f00 !important; }
+html.pro.min:not(.oscuro) .pro-hd .pro-logo b { background-image: linear-gradient(90deg, #0b1526 0%, #0b1526 40%, #e6a800 50%, #0b1526 60%, #0b1526 100%); }
+html.pro.min:not(.oscuro) .pro-stats { box-shadow: none; }
+html.pro.min:not(.oscuro) .quick-sale-bar { background: #fff1f1 !important; border-color: #f3b4b4 !important; }
+html.pro.min:not(.oscuro) .quick-sale-label { color: #b42318 !important; }
+html.pro.min:not(.oscuro) .quick-sale-inputs input { background: #fff !important; color: #0b1526 !important; border: 1px solid #f3b4b4 !important; }
+html.pro.min:not(.oscuro) .pro-buscar { box-shadow: 0 1px 2px rgba(11,21,38,.06), 0 14px 30px -18px rgba(11,21,38,.3) !important; }
+html.pro.min:not(.oscuro) .pro-ft, html.pro.min:not(.oscuro) .pro-marcas { background: var(--m-bg) !important; }
