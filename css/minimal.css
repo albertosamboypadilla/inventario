@@ -228,36 +228,3 @@ html.pro.min .pro-paso:hover i, html.pro.min .pro-badge > b, html.pro.min .cart-
   html.pro.min .pro-bgs { order: 0; width: calc(100% - 32px); flex: none; height: 56vw; margin: 16px; border-radius: 22px 22px 22px 60px; }
   html.pro.min .pro-hero-in { padding: 24px 20px; }
 }
-
-/* ══ variante 5 "rojo catálogo": blanco puro + rojo, foto ancha con texto encima ══ */
-html.pro.min, html.pro.min.oscuro {
-  --m-bg:#ffffff; --m-card:#ffffff; --m-tile:#f4f4f5; --m-tx:#111111; --m-mute:#5f6368; --m-line:#e6e6e8;
-  --m-a:#c1121f; --m-a2:#d62828; --m-asoft:rgba(214,40,40,.08);
-}
-html.pro.min .pro-hero { display: grid; grid-template-columns: 1fr; padding: 86px 24px 0; flex-direction: initial; }
-html.pro.min .pro-bgs { grid-area: 1/1; order: 0; position: relative; inset: auto; height: 560px; margin: 0; border: 0; border-radius: 20px; flex: none; }
-html.pro.min .pro-bgs::after { content: ''; position: absolute; inset: 0; z-index: 2; background: linear-gradient(90deg, rgba(10,10,10,.82) 0%, rgba(10,10,10,.55) 45%, rgba(10,10,10,0) 80%); }
-html.pro.min .pro-hero-in { grid-area: 1/1; z-index: 3; align-self: center; text-align: left; align-items: flex-start; padding: 40px 56px; flex: none; }
-html.pro.min .pro-hero-in > * { margin-left: 0; max-width: 620px; }
-html.pro.min .pro-hero h1, html.pro.min .pro-hero .pro-sub, html.pro.min .pro-chips span { color: #fff !important; }
-html.pro.min .pro-hero h1 em { color: #ff4d4d !important; }
-html.pro.min .pro-tag { background: rgba(255,255,255,.12) !important; color: #fff !important; border-color: rgba(255,255,255,.25) !important; }
-html.pro.min .pro-chips button { color: #fff !important; border-color: rgba(255,255,255,.35) !important; }
-html.pro.min .pro-btabs, html.pro.min .pro-chips { justify-content: flex-start; }
-html.pro.min .pro-buscar { background: #fff !important; }
-html.pro.min .pro-buscar .pro-btabs button.on { background: #f4f4f5 !important; color: #111 !important; }
-html.pro.min .pro-buscar input { color: #111 !important; }
-html.pro.min .pro-stats { grid-area: 2/1; margin-top: 0; background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--m-line) !important; }
-html.pro.min .pro-btn-o, html.pro.min .pro-lang button.is-selected, html.pro.min .filter-chip.is-active, html.pro.min .pro-paso:hover i, html.pro.min .pro-badge > b, html.pro.min .cart-button b { background: var(--m-a2) !important; color: #fff !important; border-color: var(--m-a2) !important; }
-html.pro.min .pro-btn-o:hover { background: var(--m-a) !important; color: #fff !important; }
-html.pro.min .pro-cta { background: #111 !important; color: #fff !important; }
-html.pro.min .pro-cta h2, html.pro.min .pro-cta p { color: #fff !important; }
-html.pro.min .pro-cta .pro-btn-w { background: var(--m-a2) !important; color: #fff !important; }
-@media (max-width: 900px) {
-  html.pro.min .pro-hero { padding: 72px 12px 0; }
-  html.pro.min .pro-bgs { height: auto; min-height: 640px; }
-  html.pro.min .pro-bgs::after { background: linear-gradient(0deg, rgba(10,10,10,.88) 0%, rgba(10,10,10,.6) 60%, rgba(10,10,10,.2) 100%); }
-  html.pro.min .pro-hero-in { padding: 24px 18px; align-self: end; }
-}
-html.pro.min .pro-bgs { height: auto; min-height: 620px; align-self: stretch; }
-html.pro.min .pro-hero-in { padding-top: 70px; padding-bottom: 70px; }
