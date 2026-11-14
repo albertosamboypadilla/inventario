@@ -254,3 +254,13 @@ html.pro.min .pro-nav { margin-left: 4px; gap: 0; }
 html.pro.min .pro-nav a, html.pro.min .pro-nav button { padding: 9px 10px !important; }
 @media (max-width: 1440px) { html.pro.min .pro-acc #authButton span { display: none; } html.pro.min .pro-acc #authButton { padding: 11px 13px; } }
 @media (max-width: 1300px) { html.pro.min .pro-acc > .pro-lang { display: none !important; } }
+html.pro.min #categorias { display: none !important; }
+/* fila de cifras ordenada: sin textos encimados */
+html.pro.min .pro-stats { margin-left: 0 !important; margin-right: 0 !important; width: 100% !important; left: 0 !important; right: 0 !important; border-top: 1px solid var(--m-line) !important; border-bottom: 1px solid var(--m-line) !important; }
+html.pro.min .pro-stats .et-stats { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; gap: 28px !important; align-items: center; padding-top: 22px !important; padding-bottom: 22px !important; }
+html.pro.min .pro-stats .et-stats > div { min-width: 0; border: 0 !important; padding: 0 !important; }
+html.pro.min .pro-stats .et-stats > div:not(.pro-dots) { border-left: 2px solid var(--m-a2) !important; padding-left: 14px !important; }
+html.pro.min .pro-stats span { display: block; font: 500 13px/1.35 var(--m-f) !important; letter-spacing: 0 !important; text-transform: none !important; white-space: normal; }
+html.pro.min .pro-dots { justify-self: end; }
+@media (max-width: 900px) { html.pro.min .pro-stats .et-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } html.pro.min .pro-dots { grid-column: 1 / -1; justify-self: start; } }
+html.pro.min .pro-stats .et-stats { border-top: 0 !important; }
