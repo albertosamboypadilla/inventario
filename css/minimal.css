@@ -1,0 +1,263 @@
+/* ══════════════════════════════════════════════════════════════
+   EUROTRUCK · diseño "minimal" (2026-11-13)
+   Minimalista y moderno: fondo claro, mucho aire, líneas finas, un solo color de acento
+   (naranja) sobre blanco cálido, portada centrada, fotos de camión enmarcadas y detalles técnicos (líneas de plano).
+   Se carga DESPUÉS de pro.css. Solo cambia la apariencia, no toca funciones.
+   Se apaga quitando la clase "min" del <html> (script al inicio del index.html).
+   ══════════════════════════════════════════════════════════════ */
+html.pro.min {
+  --m-bg:#f6f4f0; --m-card:#ffffff; --m-tile:#ece9e3; --m-tx:#16171a; --m-mute:#6e6a63; --m-line:#e2ded6;
+  --m-a:#e85d04; --m-a2:#f26a0f; --m-asoft:rgba(242,106,15,.1);
+  --m-f:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif; --m-fd:'Space Grotesk','Inter',sans-serif;
+  --p-bg:var(--m-bg); --p-card:var(--m-card); --p-tile:var(--m-tile); --p-tx:var(--m-tx); --p-mute:var(--m-mute); --p-line:var(--m-line);
+  --p-o:var(--m-a2); --p-o2:var(--m-a2);
+}
+html.pro.min.oscuro {
+  --m-bg:#0c0d10; --m-card:#131519; --m-tile:#181b20; --m-tx:#eef0f3; --m-mute:#9097a3; --m-line:#24272e;
+  --m-a:#ff7a1a; --m-a2:#ff6b0b; --m-asoft:rgba(255,107,11,.12);
+}
+html.pro.min body, html.pro.min main { background: var(--m-bg) !important; color: var(--m-tx); }
+html.pro.min ::selection { background: var(--m-a2); color: #fff; }
+
+/* ── botones: planos, sin sombras de neón ── */
+html.pro.min .pro-btn { border-radius: 10px; font: 600 14.5px var(--m-f); padding: 11px 18px; }
+html.pro.min .pro-btn:hover { transform: none; }
+html.pro.min .pro-btn-o { background: var(--m-tx) !important; color: var(--m-bg) !important; box-shadow: none; }
+html.pro.min .pro-btn-o:hover { background: var(--m-a2) !important; color: #fff !important; }
+html.pro.min .pro-btn-w { background: var(--m-card) !important; color: var(--m-tx) !important; border: 1px solid var(--m-line) !important; }
+html.pro.min .pro-btn-w:hover { border-color: var(--m-tx) !important; }
+html.pro.min .pro-btn-g { background: transparent !important; color: var(--m-tx) !important; border: 1px solid var(--m-line) !important; backdrop-filter: none; }
+html.pro.min .pro-btn-g:hover { border-color: var(--m-tx) !important; }
+
+/* ── encabezado: barra clara fija con línea fina ── */
+html.pro.min .pro-hd, html.pro.min .pro-hd.is-scrolled {
+  background: color-mix(in srgb, var(--m-bg) 88%, transparent) !important; backdrop-filter: blur(14px) saturate(1.2);
+  border-bottom: 1px solid var(--m-line); box-shadow: none !important; padding: 12px 0;
+}
+html.pro.min .pro-logo, html.pro.min .pro-logo b, html.pro.min .pro-logo small { color: var(--m-tx); }
+html.pro.min .pro-logo b { font: 700 18px var(--m-fd); letter-spacing: .06em; }
+html.pro.min .pro-logo small { opacity: .55; letter-spacing: .28em; }
+html.pro.min .pro-mk svg { filter: none; }
+html.pro.min .pro-nav a, html.pro.min .pro-nav button { color: var(--m-mute) !important; font: 500 14px var(--m-f) !important; border-radius: 8px !important; }
+html.pro.min .pro-nav a:hover, html.pro.min .pro-nav a.nav-active { background: none !important; color: var(--m-tx) !important; box-shadow: inset 0 -2px 0 var(--m-a2); border-radius: 0 !important; }
+html.pro.min .pro-nav .pro-staff { color: var(--m-a2) !important; }
+html.pro.min .pro-lang { border: 1px solid var(--m-line) !important; background: transparent !important; }
+html.pro.min .pro-lang button { color: var(--m-mute) !important; }
+html.pro.min .pro-lang button.is-selected { background: var(--m-tx) !important; color: var(--m-bg) !important; }
+html.pro.min .pro-ico, html.pro.min .pro-burger { border: 1px solid var(--m-line) !important; background: transparent !important; color: var(--m-tx) !important; }
+html.pro.min .pro-burger span { background: var(--m-tx); }
+html.pro.min .cart-button b { background: var(--m-a2); color: #fff; }
+
+/* ── portada: texto a la izquierda, foto enmarcada a la derecha ── */
+html.pro.min .pro-hero { min-height: 92vh; min-height: 92svh; background: var(--m-bg) !important; color: var(--m-tx); justify-content: center;
+  background-image: linear-gradient(var(--m-line) 1px, transparent 1px), linear-gradient(90deg, var(--m-line) 1px, transparent 1px) !important;
+  background-size: 64px 64px !important; background-position: -1px -1px !important; }
+html.pro.min .pro-hero::before { background: linear-gradient(90deg, var(--m-bg) 0%, var(--m-bg) 40%, color-mix(in srgb, var(--m-bg) 60%, transparent) 100%) !important; }
+html.pro.min .pro-hero::after { display: none; }
+html.pro.min .pro-bgs { inset: 110px 32px 132px 52%; border-radius: 22px; overflow: hidden; z-index: 2; background: var(--m-tile); outline: 1px solid var(--m-line); outline-offset: 10px; }
+html.pro.min .pro-bgs img { transform: scale(1.03); }
+html.pro.min .pro-bgs img.is-on { transform: scale(1); }
+html.pro.min .pro-hero-in { padding-top: 120px; padding-bottom: 150px; }
+html.pro.min .pro-hero-in > * { max-width: 560px; }
+html.pro.min .pro-hero h1 { color: var(--m-tx) !important; font: 700 clamp(38px, 5vw, 64px)/1.03 var(--m-fd) !important; letter-spacing: -.025em !important; text-shadow: none !important; }
+html.pro.min .pro-hero h1 em { font-style: normal; color: var(--m-a2) !important; background: none !important; -webkit-text-fill-color: currentColor !important; }
+html.pro.min .pro-sub { color: var(--m-mute) !important; font: 400 17px/1.6 var(--m-f) !important; }
+html.pro.min .pro-tag { background: var(--m-card) !important; color: var(--m-tx) !important; border: 1px solid var(--m-line) !important; backdrop-filter: none !important; font: 500 13px var(--m-f) !important; }
+html.pro.min .pro-tag i { background: #10b981 !important; box-shadow: 0 0 0 4px rgba(16,185,129,.15) !important; }
+
+/* buscador: una sola caja limpia */
+html.pro.min .pro-buscar { background: var(--m-card) !important; border: 1px solid var(--m-line) !important; border-radius: 16px !important; box-shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px -18px rgba(0,0,0,.18) !important; backdrop-filter: none !important; padding: 8px !important; pointer-events: auto; }
+html.pro.min .pro-btabs { background: none !important; border: 0 !important; gap: 2px !important; padding: 2px 2px 8px !important; border-bottom: 1px solid var(--m-line) !important; margin-bottom: 8px !important; }
+html.pro.min .pro-btabs button { color: var(--m-mute) !important; background: none !important; font: 500 13px var(--m-f) !important; border-radius: 8px !important; }
+html.pro.min .pro-btabs button.on { color: var(--m-tx) !important; background: var(--m-tile) !important; }
+html.pro.min .pro-brow { background: none !important; border: 0 !important; }
+html.pro.min .pro-brow svg { stroke: var(--m-mute) !important; }
+html.pro.min .pro-brow input { color: var(--m-tx) !important; background: none !important; font: 400 16px var(--m-f) !important; }
+html.pro.min .pro-brow input::placeholder { color: var(--m-mute) !important; opacity: .8; }
+html.pro.min .pro-scan { color: var(--m-tx) !important; border-color: var(--m-line) !important; background: none !important; }
+html.pro.min .pro-chips { pointer-events: auto; }
+html.pro.min .pro-chips span { color: var(--m-mute) !important; }
+html.pro.min .pro-chips button { background: none !important; color: var(--m-tx) !important; border: 1px solid var(--m-line) !important; backdrop-filter: none !important; font: 500 13px var(--m-f) !important; border-radius: 999px !important; }
+html.pro.min .pro-chips button:hover { border-color: var(--m-tx) !important; }
+
+/* cifras: fila técnica con divisores */
+html.pro.min .pro-stats { background: var(--m-card) !important; border-top: 1px solid var(--m-line) !important; backdrop-filter: none !important; color: var(--m-tx) !important; z-index: 3; }
+html.pro.min .pro-stats .et-stats > div { border-color: var(--m-line) !important; }
+html.pro.min .pro-stats b { color: var(--m-tx) !important; font: 700 26px var(--m-fd) !important; letter-spacing: -.02em; }
+html.pro.min .pro-stats span { color: var(--m-mute) !important; }
+html.pro.min .pro-cap, html.pro.min .pro-cap b, html.pro.min .pro-cap span { color: var(--m-tx) !important; }
+html.pro.min #heroTabs button { color: var(--m-mute) !important; }
+html.pro.min #heroTabs button.is-on { color: var(--m-tx) !important; }
+html.pro.min #heroTabs button i { background: var(--m-line) !important; }
+html.pro.min #heroTabs button.is-on i::after { background: var(--m-a2) !important; }
+html.pro.min .pro-hero .md-flecha { background: var(--m-card) !important; color: var(--m-tx) !important; border: 1px solid var(--m-line) !important; }
+
+/* ── marcas ── */
+html.pro.min .pro-marcas { background: var(--m-bg) !important; border-bottom: 1px solid var(--m-line) !important; border-top: 0 !important; }
+html.pro.min .pro-marcas small { color: var(--m-mute) !important; letter-spacing: .2em; }
+html.pro.min .pro-marcas button { color: var(--m-mute) !important; font: 600 15px var(--m-fd) !important; letter-spacing: .14em; opacity: 1 !important; background: none !important; }
+html.pro.min .pro-marcas button:hover { color: var(--m-tx) !important; }
+
+/* ── secciones ── */
+html.pro.min .pro-sec { padding: 96px 0 !important; background: var(--m-bg) !important; }
+html.pro.min .pro-sec--t0 { padding-top: 0 !important; }
+html.pro.min .pro-k { color: var(--m-a2) !important; background: none !important; border: 0 !important; padding: 0 !important; font: 600 12px var(--m-f) !important; letter-spacing: .18em !important; text-transform: uppercase; }
+html.pro.min .pro-k::before { content: ''; display: inline-block; width: 18px; height: 1px; background: currentColor; vertical-align: middle; margin-right: 10px; }
+html.pro.min .pro-sec h2, html.pro.min .pro-serv h2, html.pro.min #catalogo h2, html.pro.min #registro h2, html.pro.min #faq h2 { color: var(--m-tx) !important; font: 700 clamp(28px, 3.4vw, 42px)/1.1 var(--m-fd) !important; letter-spacing: -.02em !important; }
+html.pro.min .pro-lead { color: var(--m-mute) !important; }
+
+/* categorías: tarjetas planas con borde fino */
+html.pro.min .pro-cat, html.pro.min .pro-cat.o, html.pro.min .pro-cat.d { background: var(--m-card) !important; color: var(--m-tx) !important; border: 1px solid var(--m-line) !important; box-shadow: none !important; border-radius: 16px !important; transition: border-color .2s, transform .2s; }
+html.pro.min .pro-cat:hover { border-color: var(--m-tx) !important; transform: translateY(-2px); }
+html.pro.min .pro-cat h3 { color: var(--m-tx) !important; font: 600 18px var(--m-fd) !important; }
+html.pro.min .pro-cat p, html.pro.min .pro-cat .n, html.pro.min .pro-cat.o p, html.pro.min .pro-cat.o .n, html.pro.min .pro-cat.d p, html.pro.min .pro-cat.d .n { color: var(--m-mute) !important; }
+html.pro.min .pro-cat .ic { background: var(--m-asoft) !important; color: var(--m-a2) !important; border: 0 !important; }
+html.pro.min .pro-cat .go { background: var(--m-tx) !important; color: var(--m-bg) !important; }
+html.pro.min .pro-cat.big { color: #fff !important; border: 0 !important; }
+html.pro.min .pro-cat.big h3, html.pro.min .pro-cat.big p, html.pro.min .pro-cat.big .n { color: #fff !important; }
+
+/* piezas destacadas */
+html.pro.min .pro-pz { background: var(--m-card) !important; border: 1px solid var(--m-line) !important; box-shadow: none !important; border-radius: 16px !important; }
+html.pro.min .pro-pz:hover { border-color: var(--m-tx) !important; transform: none !important; }
+html.pro.min .pro-pz-img { background: var(--m-tile) !important; }
+html.pro.min .pro-pz h4 { color: var(--m-tx) !important; font: 600 15px var(--m-f) !important; }
+html.pro.min .pro-pz-m, html.pro.min .pro-pz-f { color: var(--m-mute) !important; }
+html.pro.min .pro-pz-f code { background: var(--m-tile) !important; color: var(--m-tx) !important; }
+html.pro.min .pro-pz .pro-add { background: var(--m-tx) !important; color: var(--m-bg) !important; box-shadow: none !important; }
+
+/* servicios: foto + lista numerada sobria */
+html.pro.min .pro-serv { background: var(--m-bg) !important; color: var(--m-tx) !important; border-top: 1px solid var(--m-line); }
+html.pro.min .pro-foto img { border-radius: 22px; }
+html.pro.min .pro-badge { background: var(--m-card) !important; color: var(--m-tx) !important; border: 1px solid var(--m-line) !important; box-shadow: none !important; backdrop-filter: none !important; }
+html.pro.min .pro-badge > b { background: var(--m-a2) !important; color: #fff !important; }
+html.pro.min .pro-paso { border-color: var(--m-line) !important; background: none !important; }
+html.pro.min .pro-paso i { background: none !important; color: var(--m-mute) !important; border: 1px solid var(--m-line) !important; font: 500 13px var(--m-fd) !important; font-style: normal !important; }
+html.pro.min .pro-paso:hover i { color: #fff !important; background: var(--m-a2) !important; border-color: var(--m-a2) !important; }
+html.pro.min .pro-paso h4 { color: var(--m-tx) !important; }
+html.pro.min .pro-paso p { color: var(--m-mute) !important; }
+
+/* catálogo, registro y preguntas: mismo fondo, separados por línea */
+html.pro.min #catalogo, html.pro.min #registro, html.pro.min #faq { background: var(--m-bg) !important; border-top: 1px solid var(--m-line); }
+html.pro.min .et-card, html.pro.min .reg-form { background: var(--m-card) !important; border: 1px solid var(--m-line) !important; box-shadow: none !important; }
+
+/* llamada final */
+html.pro.min .pro-cta { background: var(--m-tx) !important; color: var(--m-bg) !important; border-radius: 24px !important; }
+html.pro.min .pro-cta::after { display: none !important; }
+html.pro.min .pro-cta h2 { color: var(--m-bg) !important; font-family: var(--m-fd) !important; }
+html.pro.min .pro-cta p { color: color-mix(in srgb, var(--m-bg) 70%, transparent) !important; }
+html.pro.min .pro-cta .pro-btn-w { background: var(--m-bg) !important; color: var(--m-tx) !important; border: 0 !important; }
+
+/* pie */
+html.pro.min .pro-ft { background: var(--m-bg) !important; color: var(--m-tx) !important; border-top: 1px solid var(--m-line); }
+html.pro.min .pro-ft h5 { color: var(--m-tx) !important; }
+html.pro.min .pro-ft p, html.pro.min .pro-ft a, html.pro.min .pro-ft-bot { color: var(--m-mute) !important; }
+html.pro.min .pro-ft a:hover { color: var(--m-tx) !important; }
+html.pro.min .pro-ft .pro-logo, html.pro.min .pro-ft .pro-logo b, html.pro.min .pro-ft .pro-logo small { color: var(--m-tx) !important; }
+html.pro.min .pro-soc a { background: none !important; border: 1px solid var(--m-line) !important; color: var(--m-tx) !important; }
+html.pro.min .pro-ft-bot { border-color: var(--m-line) !important; }
+
+/* pantalla de carga */
+html.pro.min #splash { background: var(--m-bg) !important; }
+html.pro.min #splash b, html.pro.min #splash small { color: var(--m-tx) !important; }
+
+/* ── celular y tableta: foto arriba, texto abajo ── */
+@media (max-width: 900px) {
+  html.pro.min .pro-hero { min-height: 0; }
+  html.pro.min .pro-bgs { position: relative; inset: auto; height: 46vw; min-height: 220px; margin: 84px 20px 0; }
+  html.pro.min .pro-hero::before { display: none; }
+  html.pro.min .pro-hero-in { padding-top: 32px; padding-bottom: 32px; }
+  html.pro.min .pro-hero-in > * { max-width: none; }
+  html.pro.min .pro-stats { position: relative !important; }
+  html.pro.min .pro-nav.is-open { background: var(--m-card) !important; border-bottom: 1px solid var(--m-line) !important; }
+  html.pro.min .pro-nav.is-open a, html.pro.min .pro-nav.is-open button { color: var(--m-tx) !important; }
+  html.pro.min .pro-sec { padding: 64px 0 !important; }
+}
+
+/* ── variante 3: portada centrada, buscador grande, camión en franja ancha abajo ── */
+html.pro.min .pro-hero { background-image: none !important; display: flex; flex-direction: column; min-height: 0; }
+html.pro.min .pro-hero-in { order: 1; } html.pro.min .pro-bgs { order: 2; } html.pro.min .pro-stats { order: 3; }
+html.pro.min .pro-hero::before { display: none; }
+html.pro.min .pro-hero-in { text-align: center; padding-top: 130px; padding-bottom: 40px; display: flex; flex-direction: column; align-items: center; }
+html.pro.min .pro-hero-in > * { max-width: 760px; margin-left: auto; margin-right: auto; }
+html.pro.min .pro-hero h1 { font-size: clamp(40px, 5.6vw, 76px) !important; }
+html.pro.min .pro-buscar { width: 100%; text-align: left; }
+html.pro.min .pro-btabs { justify-content: center; }
+html.pro.min .pro-chips { justify-content: center; }
+html.pro.min .pro-bgs { position: relative; inset: auto; height: 46vh; min-height: 280px; margin: 0 32px; border-radius: 24px; outline: 0; }
+html.pro.min .pro-stats { position: relative !important; background: transparent !important; border: 0 !important; }
+html.pro.min .pro-btn-o { background: var(--m-a2) !important; color: #fff !important; }
+html.pro.min .pro-btn-o:hover { background: var(--m-a) !important; }
+html.pro.min .pro-lang button.is-selected { background: var(--m-a2) !important; color: #fff !important; }
+@media (max-width: 900px) { html.pro.min .pro-hero-in { padding-top: 96px; } html.pro.min .pro-bgs { margin: 0 16px; height: 52vw; } }
+
+/* ── lista de productos justo debajo de la portada (orden visual; el área de salida/venta rápida se queda igual) ── */
+html.pro.min main { display: flex; flex-direction: column; }
+html.pro.min main > * { order: 5; }
+html.pro.min main > #inicio { order: 1; }
+html.pro.min main > #catalogo { order: 2; border-top: 0 !important; padding-top: 48px !important; }
+html.pro.min main > #marcas { order: 3; }
+html.pro.min #catalogo .et-search, html.pro.min #catalogo .catalog-search { background: var(--m-card) !important; border: 1px solid var(--m-line) !important; border-radius: 14px !important; box-shadow: none !important; }
+html.pro.min #catalogo .catalog-search input { background: none !important; color: var(--m-tx) !important; font: 400 16px var(--m-f) !important; }
+html.pro.min #catalogo .catalog-search svg { stroke: var(--m-mute) !important; }
+html.pro.min #catalogo .scan-camera-btn { background: var(--m-tile) !important; color: var(--m-tx) !important; border: 0 !important; }
+html.pro.min .filter-chip { background: var(--m-card) !important; color: var(--m-tx) !important; border: 1px solid var(--m-line) !important; border-radius: 999px !important; box-shadow: none !important; font: 500 13px var(--m-f) !important; }
+html.pro.min .filter-chip.is-active { background: var(--m-a2) !important; color: #fff !important; border-color: var(--m-a2) !important; }
+html.pro.min #catalogo .et-btn--ghost { background: var(--m-card) !important; color: var(--m-tx) !important; border: 1px solid var(--m-line) !important; box-shadow: none !important; }
+html.pro.min .catalog-meta, html.pro.min .filter-group > span { color: var(--m-mute) !important; }
+
+/* ══ variante 4 "azul taller": azul marino + amarillo de seguridad, portada dividida ══ */
+html.pro.min, html.pro.min.oscuro {
+  --m-bg:#0b1526; --m-card:#11203a; --m-tile:#16294a; --m-tx:#f1f5fb; --m-mute:#9fb0c8; --m-line:#1f3558;
+  --m-a:#ffd23f; --m-a2:#ffc300; --m-asoft:rgba(255,195,0,.12);
+}
+html.pro.min .pro-hero { flex-direction: row; flex-wrap: wrap; align-items: center; padding-top: 70px; }
+html.pro.min .pro-hero-in { order: 1; flex: 1 1 52%; text-align: left; align-items: flex-start; padding: 60px 32px 40px max(32px, calc((100vw - 1280px)/2 + 32px)); }
+html.pro.min .pro-hero-in > * { margin-left: 0; max-width: 600px; }
+html.pro.min .pro-btabs, html.pro.min .pro-chips { justify-content: flex-start; }
+html.pro.min .pro-bgs { order: 2; flex: 1 1 40%; height: 520px; margin: 0 32px 0 0; border-radius: 28px 28px 28px 120px; border: 3px solid var(--m-a2); }
+html.pro.min .pro-stats { order: 3; flex: 1 1 100%; margin-top: 40px; background: var(--m-card) !important; border-top: 1px solid var(--m-line) !important; }
+html.pro.min .pro-hero h1 em { color: var(--m-a2) !important; }
+html.pro.min .pro-btn-o, html.pro.min .pro-lang button.is-selected, html.pro.min .filter-chip.is-active { background: var(--m-a2) !important; color: #0b1526 !important; border-color: var(--m-a2) !important; }
+html.pro.min .pro-btn-o:hover { background: var(--m-a) !important; color: #0b1526 !important; }
+html.pro.min .pro-cta { background: var(--m-a2) !important; color: #0b1526 !important; }
+html.pro.min .pro-cta h2, html.pro.min .pro-cta p { color: #0b1526 !important; }
+html.pro.min .pro-cta .pro-btn-w { background: #0b1526 !important; color: #fff !important; }
+html.pro.min .pro-paso:hover i, html.pro.min .pro-badge > b, html.pro.min .cart-button b { background: var(--m-a2) !important; color: #0b1526 !important; border-color: var(--m-a2) !important; }
+@media (max-width: 900px) {
+  html.pro.min .pro-hero { flex-direction: column; }
+  html.pro.min .pro-bgs { order: 0; width: calc(100% - 32px); flex: none; height: 56vw; margin: 16px; border-radius: 22px 22px 22px 60px; }
+  html.pro.min .pro-hero-in { padding: 24px 20px; }
+}
+
+/* ══ variante 5 "rojo catálogo": blanco puro + rojo, foto ancha con texto encima ══ */
+html.pro.min, html.pro.min.oscuro {
+  --m-bg:#ffffff; --m-card:#ffffff; --m-tile:#f4f4f5; --m-tx:#111111; --m-mute:#5f6368; --m-line:#e6e6e8;
+  --m-a:#c1121f; --m-a2:#d62828; --m-asoft:rgba(214,40,40,.08);
+}
+html.pro.min .pro-hero { display: grid; grid-template-columns: 1fr; padding: 86px 24px 0; flex-direction: initial; }
+html.pro.min .pro-bgs { grid-area: 1/1; order: 0; position: relative; inset: auto; height: 560px; margin: 0; border: 0; border-radius: 20px; flex: none; }
+html.pro.min .pro-bgs::after { content: ''; position: absolute; inset: 0; z-index: 2; background: linear-gradient(90deg, rgba(10,10,10,.82) 0%, rgba(10,10,10,.55) 45%, rgba(10,10,10,0) 80%); }
+html.pro.min .pro-hero-in { grid-area: 1/1; z-index: 3; align-self: center; text-align: left; align-items: flex-start; padding: 40px 56px; flex: none; }
+html.pro.min .pro-hero-in > * { margin-left: 0; max-width: 620px; }
+html.pro.min .pro-hero h1, html.pro.min .pro-hero .pro-sub, html.pro.min .pro-chips span { color: #fff !important; }
+html.pro.min .pro-hero h1 em { color: #ff4d4d !important; }
+html.pro.min .pro-tag { background: rgba(255,255,255,.12) !important; color: #fff !important; border-color: rgba(255,255,255,.25) !important; }
+html.pro.min .pro-chips button { color: #fff !important; border-color: rgba(255,255,255,.35) !important; }
+html.pro.min .pro-btabs, html.pro.min .pro-chips { justify-content: flex-start; }
+html.pro.min .pro-buscar { background: #fff !important; }
+html.pro.min .pro-buscar .pro-btabs button.on { background: #f4f4f5 !important; color: #111 !important; }
+html.pro.min .pro-buscar input { color: #111 !important; }
+html.pro.min .pro-stats { grid-area: 2/1; margin-top: 0; background: transparent !important; border: 0 !important; border-bottom: 1px solid var(--m-line) !important; }
+html.pro.min .pro-btn-o, html.pro.min .pro-lang button.is-selected, html.pro.min .filter-chip.is-active, html.pro.min .pro-paso:hover i, html.pro.min .pro-badge > b, html.pro.min .cart-button b { background: var(--m-a2) !important; color: #fff !important; border-color: var(--m-a2) !important; }
+html.pro.min .pro-btn-o:hover { background: var(--m-a) !important; color: #fff !important; }
+html.pro.min .pro-cta { background: #111 !important; color: #fff !important; }
+html.pro.min .pro-cta h2, html.pro.min .pro-cta p { color: #fff !important; }
+html.pro.min .pro-cta .pro-btn-w { background: var(--m-a2) !important; color: #fff !important; }
+@media (max-width: 900px) {
+  html.pro.min .pro-hero { padding: 72px 12px 0; }
+  html.pro.min .pro-bgs { height: auto; min-height: 640px; }
+  html.pro.min .pro-bgs::after { background: linear-gradient(0deg, rgba(10,10,10,.88) 0%, rgba(10,10,10,.6) 60%, rgba(10,10,10,.2) 100%); }
+  html.pro.min .pro-hero-in { padding: 24px 18px; align-self: end; }
+}
+html.pro.min .pro-bgs { height: auto; min-height: 620px; align-self: stretch; }
+html.pro.min .pro-hero-in { padding-top: 70px; padding-bottom: 70px; }

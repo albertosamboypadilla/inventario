@@ -11,6 +11,8 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
 <link rel="stylesheet" href="/css/taller.css?v=20261111140500">
 <link rel="stylesheet" href="/css/moderno.css?v=20261111140500">
 <link rel="stylesheet" href="/css/pro.css?v=20261111140500">
+<link rel="stylesheet" href="/css/minimal.css?v=20261113230000">
+<script>document.documentElement.classList.add('min')</script>
 
 
 <div id="splash" aria-hidden="true"><div class="sp-logo"><span class="sp-ring"></span><b>EUROTRUCK</b><small>REPUESTOS · SERVICIOS</small></div></div>
@@ -42,11 +44,12 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
 <main>
 <section class="pro-hero" id="inicio">
   <div class="pro-bgs" id="heroMedia">
-    <img class="is-on" data-truck="mercedes" src="/img/sitio/3898b91c9e6c.jpg" alt="" fetchpriority="high">
+    <img class="is-on" data-truck="scania" src="/img/sitio/5bc094ffcb0f.jpg" alt="" fetchpriority="high">
+    <img data-truck="mercedes" src="/img/sitio/3898b91c9e6c.jpg" alt="" loading="lazy">
     <img data-truck="volvo" src="/img/sitio/c9812ef11654.jpg" alt="" loading="lazy">
     <img data-truck="man" src="/img/sitio/ed78b8ca404a.jpg" alt="" loading="lazy">
     <img data-truck="iveco" src="/img/sitio/95db6d9b83f3.jpg" alt="" loading="lazy">
-    <img data-truck="scania" src="/img/sitio/5bc094ffcb0f.jpg" alt="" loading="lazy">
+    
     <div id="heroHots" hidden></div>
   </div>
   <div class="pro-w pro-hero-in">
@@ -79,13 +82,13 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
       <div><b>24 h</b><span data-en="rescue &amp; mobile workshop">rescate y taller móvil</span></div>
       <div><b data-en="Today">Hoy</b><span data-en="dispatch in Santo Domingo">despacho en Santo Domingo</span></div>
       <div class="pro-dots">
-        <p class="pro-cap"><b id="heroBrand">MERCEDES-BENZ</b> <span id="heroCap"></span></p>
+        <p class="pro-cap"><b id="heroBrand">SCANIA</b> <span id="heroCap"></span></p>
         <div id="heroTabs" role="tablist">
-          <button data-truck="mercedes" class="is-on" role="tab"><span>Mercedes</span><i></i></button>
+          <button data-truck="mercedes" role="tab"><span>Mercedes</span><i></i></button>
           <button data-truck="volvo" role="tab"><span>Volvo</span><i></i></button>
           <button data-truck="man" role="tab"><span>MAN</span><i></i></button>
           <button data-truck="iveco" role="tab"><span>Iveco</span><i></i></button>
-          <button data-truck="scania" role="tab"><span>Scania</span><i></i></button>
+          <button data-truck="scania" class="is-on" role="tab"><span>Scania</span><i></i></button>
         </div>
       </div>
     </div>
