@@ -1594,14 +1594,23 @@ function stockPillHtml(stock){
 const _normSkuCache = new Map();
 const normSku = x => { const k = String(x||''); let v = _normSkuCache.get(k); if(v === undefined){ v = k.toLowerCase().replace(/[\s.\-\/]/g,''); if(_normSkuCache.size < 300000) _normSkuCache.set(k, v); } return v; };
 function searchRank(p, q){
-  const r = String(p.ref||'').toLowerCase(), nr = normSku(r), nq = normSku(q);
-  if(r === q || (nq && nr === nq)) return 0;
-  if(r.startsWith(q) || (nq && nr.startsWith(nq))) return 1;
-  if(r.includes(q) || (nq.length >= 2 && nr.includes(nq))) return 2;
+  // Quitar asteriscos Code 39 por si el lector los incluye
+  const qClean = q.replace(/^\*+|\*+$/g,'');
+  const r = String(p.ref||'').toLowerCase(), nr = normSku(r), nq = normSku(qClean);
+  const ic = (internalCodes[p.ref]||'').toLowerCase();
+  // Código interno Zebra exacto → máxima prioridad (igual que SKU exacto)
+  if(ic && (ic === qClean || ic === q)) return 0;
+  if(r === qClean || (nq && nr === nq)) return 0;
+  if(r.startsWith(qClean) || (nq && nr.startsWith(nq))) return 1;
+  // Código interno empieza con lo que se escribió (ej. "000" encuentra "00012")
+  if(ic && ic.startsWith(qClean)) return 1;
+  if(r.includes(qClean) || (nq.length >= 2 && nr.includes(nq))) return 2;
+  // Código interno contiene lo buscado
+  if(ic && ic.includes(qClean)) return 2;
   const inv = inventoryState[p.ref] || {};
-  if((p.gtin||'').toLowerCase() === q || (inv.gtin||'').toLowerCase() === q || (internalCodes[p.ref]||'').toLowerCase() === q || (inv.altCodes||[]).some(c=>String(c).toLowerCase() === q)) return 3;
-  if(codeListHit(p.refsList, q, true)) return 4;
-  if(String(p.title||'').toLowerCase().startsWith(q)) return 5;
+  if((p.gtin||'').toLowerCase() === qClean || (inv.gtin||'').toLowerCase() === qClean || (inv.altCodes||[]).some(c=>String(c).toLowerCase() === qClean)) return 3;
+  if(codeListHit(p.refsList, qClean, true)) return 4;
+  if(String(p.title||'').toLowerCase().startsWith(qClean)) return 5;
   return 6;
 }
 const _skuCollator = new Intl.Collator('es', {numeric:true});
@@ -1612,18 +1621,19 @@ function sortBySearch(list, q){
   return rows.map(x=>x.p);
 }
 function getFilteredProducts(){
-  const q = searchTerm.toLowerCase();
+  const q = searchTerm.toLowerCase().replace(/^\*+|\*+$/g,''); // quitar asteriscos Code 39
   const _nq = normSku(q);
   const res = visibleProducts().filter(p=>{
     const matchesBrand = activeBrand==='Todas' || p.brand===activeBrand;
     if(!matchesBrand) return false;
     if(window.__etSis && !window.__etSis(p)) return false;
     if(!q) return true;
+    // Código interno Zebra — búsqueda parcial desde el inicio
+    if(internalCodes[p.ref] && internalCodes[p.ref].toLowerCase().includes(q)) return true;
     if(_nq.length >= 2 && normSku(p.ref).includes(_nq)) return true;
     const inv = peekInv(p.ref);
     if(p.title.toLowerCase().includes(q) || p.ref.toLowerCase().includes(q) || p.cat.toLowerCase().includes(q) || (p.gtin||'').toLowerCase().includes(q) || (inv.gtin||'').toLowerCase().includes(q)) return true;
     if(inv.altCodes && inv.altCodes.some(c=>String(c).toLowerCase().includes(q))) return true;
-    if(internalCodes[p.ref] && internalCodes[p.ref].toLowerCase().includes(q)) return true;
     if(codeListHit(p.refsList, q, false)) return true;
     if(inv.altCodes && normCode(q).length >= 3 && inv.altCodes.some(c=>normCode(c).includes(normCode(q)))) return true;
     return false;
@@ -2864,12 +2874,17 @@ function removeExtraLocation(ref, loc){
 // 1) SKU  2) GTIN / GTIN extra  3) código Zebra  4) referencia original (solo si la tiene UN solo artículo)
 let lastCodeAmbiguous = null;
 function findProductByCode(code){
-  const lc = String(code||'').trim().toLowerCase(); lastCodeAmbiguous = null;
+  // Algunos lectores Code 39 envían asteriscos (*00001*) — los quitamos antes de buscar
+  const lc = String(code||'').trim().replace(/^\*+|\*+$/g,'').toLowerCase(); lastCodeAmbiguous = null;
   if(!lc) return null;
   const vis = visibleProducts();
+  // 1. SKU exacto
   let p = vis.find(p => p.ref.toLowerCase() === lc); if(p) return p;
-  p = vis.find(p => { const inv = getInv(p.ref); return (inv.gtin||'').toLowerCase() === lc || (p.gtin||'').toLowerCase() === lc || (Array.isArray(inv.altCodes) && inv.altCodes.some(c => String(c).toLowerCase() === lc)); }); if(p) return p;
+  // 2. Código interno Zebra (asignado por la web) — exacto
   p = vis.find(p => internalCodes[p.ref] && internalCodes[p.ref].toLowerCase() === lc); if(p) return p;
+  // 3. GTIN / altCodes del fabricante — exacto
+  p = vis.find(p => { const inv = getInv(p.ref); return (inv.gtin||'').toLowerCase() === lc || (p.gtin||'').toLowerCase() === lc || (Array.isArray(inv.altCodes) && inv.altCodes.some(c => String(c).toLowerCase() === lc)); }); if(p) return p;
+  // 4. Referencia OEM exacta
   const oe = vis.filter(p => codeListHit(p.refsList, lc, true));
   if(oe.length === 1) return oe[0];
   if(oe.length > 1) lastCodeAmbiguous = oe;
