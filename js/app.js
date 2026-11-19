@@ -1655,7 +1655,7 @@ function productCardHtml(p){
   const locLine = inv.location ? allLocationsLabel(inv) : tr('Sin asignar','Unassigned');
   return `
   <article class="product-card" data-ref="${p.ref}">
-    <div class="product-visual" onclick="event.stopPropagation();openZoom('${p.ref}')"><img src="${p.img}" alt="${p.title} — ${p.ref}" loading="lazy" onerror="this.style.opacity=.25"></div>
+    <div class="product-visual" onclick="event.stopPropagation();openZoom('${p.ref}')"><img src="${p.img}" alt="${p.title} — ${p.ref}" loading="lazy" onerror="this.src='img/mascota-rinoceronte.svg'"></div>
     <div class="product-info">
       <div class="product-marca-row"><span class="marca-badge">${p.marca}</span><b style="color:#92a5c4;font-size:.62rem;">${p.cat}</b></div>
       <span class="product-sku"><small>SKU</small>${p.sku}</span>
@@ -1751,7 +1751,7 @@ function openProductModal(ref){
   content.innerHTML = `
     <button class="modal-close" onclick="closeProductModal()" aria-label="Cerrar">✕</button>
     <div class="pd-top">
-      <div class="pd-visual" onclick="openZoom('${p.ref}')"><img src="${p.img}" alt="${p.title} — ${p.ref}" onerror="this.style.opacity=.25"></div>
+      <div class="pd-visual" onclick="openZoom('${p.ref}')"><img src="${p.img}" alt="${p.title} — ${p.ref}" onerror="this.src='img/mascota-rinoceronte.svg'"></div>
       <div>
         <div class="product-marca-row"><span class="marca-badge">${p.marca}</span><b style="color:#92a5c4;font-size:.62rem;">${p.cat}</b></div>
         <h3 class="pd-title">${p.title}</h3>
@@ -2373,7 +2373,7 @@ function openQuoteDetail(orderId){
     <div id="quoteLines">${(o.items||[]).map((it,i)=>{
       const p = PRODUCTS_BY_REF[it.ref];
       return `<div class="quote-line">
-        <img src="${p ? p.img : ''}" alt="" onerror="this.style.opacity=.25">
+        <img src="${p ? p.img : ''}" alt="" onerror="this.src='img/mascota-rinoceronte.svg'">
         <div><b style="display:block;font-size:.78rem;color:#eef2f8;">${it.title}</b><span style="font-size:.64rem;color:#8b96ab;">SKU ${it.ref}</span></div>
         <span>x${it.qty}</span>
         <input type="number" min="0" step="0.01" value="${it.price||0}" onchange="updateQuoteLinePrice('${o.id}',${i},this.value)">
@@ -2606,11 +2606,12 @@ function manualRegisterFromInputs(){
   codeEl.value = '';
 }
 
-/* ---------- Área de conteo (tramo / estante) ---------- */
+/* ---------- Área de conteo (piso / tramo / estante) ---------- */
 function activeArea(){
-  if(!countAreas.length) countAreas.push({tramo:'1', estante:'1', counts:{}});
+  if(!countAreas.length) countAreas.push({piso:'2', tramo:'1', estante:'1', counts:{}});
   if(activeAreaIndex >= countAreas.length || activeAreaIndex < 0) activeAreaIndex = 0;
   if(!countAreas[activeAreaIndex].counts) countAreas[activeAreaIndex].counts = {};
+  if(countAreas[activeAreaIndex].piso === undefined) countAreas[activeAreaIndex].piso = '2';
   return countAreas[activeAreaIndex];
 }
 function syncLocationsFromAreas(){
@@ -2620,9 +2621,11 @@ function renderAreaSelect(){
   const sel = document.getElementById('areaSelect');
   if(!sel) return;
   activeArea();
-  sel.innerHTML = countAreas.map((a,i)=>`<option value="${i}" ${i===activeAreaIndex?'selected':''}>${a.tramo || '—'} / ${a.estante || '—'}</option>`).join('');
+  sel.innerHTML = countAreas.map((a,i)=>`<option value="${i}" ${i===activeAreaIndex?'selected':''}>Piso ${a.piso || '—'} · ${a.tramo || '—'} / ${a.estante || '—'}</option>`).join('');
+  const pisoEl = document.getElementById('pisoInput');
   const tramoEl = document.getElementById('tramoInput');
   const estanteEl = document.getElementById('estanteInput');
+  if(pisoEl) pisoEl.value = countAreas[activeAreaIndex].piso || '2';
   if(tramoEl) tramoEl.value = countAreas[activeAreaIndex].tramo;
   if(estanteEl) estanteEl.value = countAreas[activeAreaIndex].estante;
 }
@@ -2634,8 +2637,9 @@ function setActiveAreaIndex(idx){
   renderInventoryStats();
 }
 function addCountArea(){
+  const pisoActual = (countAreas[activeAreaIndex] && countAreas[activeAreaIndex].piso) || '2';
   const vacia = countAreas.findIndex(a=> !a.tramo && !a.estante && !(a.counts && Object.keys(a.counts).length));
-  if(vacia >= 0) activeAreaIndex = vacia; else { countAreas.push({tramo:'', estante:'', counts:{}}); activeAreaIndex = countAreas.length-1; }
+  if(vacia >= 0) activeAreaIndex = vacia; else { countAreas.push({piso:pisoActual, tramo:'', estante:'', counts:{}}); activeAreaIndex = countAreas.length-1; }
   syncLocationsFromAreas();
   saveMeta();
   renderAreaSelect();
@@ -2647,6 +2651,15 @@ function addCountArea(){
   const estanteEl = document.getElementById('estanteInput');
   if(tramoEl){ tramoEl.value=''; tramoEl.focus(); }
   if(estanteEl) estanteEl.value='';
+}
+// El piso NO se toca hasta que lo cambien a propósito (se queda seleccionado mientras se escanea).
+function commitPiso(val){
+  const area = activeArea();
+  area.piso = String(val||'2');
+  syncLocationsFromAreas();
+  saveMeta();
+  const sel = document.getElementById('areaSelect');
+  if(sel && sel.options[activeAreaIndex]) sel.options[activeAreaIndex].textContent = `Piso ${area.piso || '—'} · ${area.tramo || '—'} / ${area.estante || '—'}`;
 }
 // Formato de ubicaciones: tramo en mayúsculas sin guiones (T04, T1) y casilla sin guiones (2A1, 2A7 ARRIBA)
 function normTramo(v){ return String(v||'').toUpperCase().replace(/[-_\s]+/g,'').trim(); }
@@ -2681,7 +2694,7 @@ function commitAreaField(field){
   saveMeta();
   const sel = document.getElementById('areaSelect');
   if(sel && sel.options[activeAreaIndex]){
-    sel.options[activeAreaIndex].textContent = `${area.tramo || '—'} / ${area.estante || '—'}`;
+    sel.options[activeAreaIndex].textContent = `Piso ${area.piso || '—'} · ${area.tramo || '—'} / ${area.estante || '—'}`;
   }
   renderCatalogCards();
 }
@@ -2735,6 +2748,19 @@ function removeActiveArea(){
   renderCountedItemsList();
   renderInventoryStats();
   renderCatalogCards();
+}
+// Marca Piso 2 en todos los artículos ya registrados (con ubicación) que todavía no tienen
+// piso asignado — de una sola vez. Es seguro repetirlo: a los que ya tengan piso no los toca.
+function migrarPiso2(){
+  if(!currentUser || currentUser.role!=='admin'){ showToast('Solo un administrador puede hacer esto.'); return; }
+  const pendientes = Object.keys(inventoryState).filter(ref=> !deletedRefs.includes(ref) && allLocations(inventoryState[ref]).length && !inventoryState[ref].piso);
+  if(!pendientes.length){ showToast('No hay artículos pendientes: todos los que tienen ubicación ya tienen piso asignado.'); return; }
+  if(!confirm(`Se va a descargar un respaldo y luego marcar PISO 2 en ${pendientes.length} artículo(s) ya registrados que no tienen piso. ¿Continuar?`)) return;
+  downloadFullBackup();
+  for(const ref of pendientes) inventoryState[ref].piso = '2';
+  saveInventory();
+  renderCatalogCards(); renderProducts();
+  showToast(`✓ Piso 2 marcado en ${pendientes.length} artículo(s).`);
 }
 // Deshacer TODO el conteo de esta área por error — como el stock ya NO se suma al escanear
 // (solo se suma al "Cerrar Entrada"), esto solo tiene que vaciar la lista, sin tocar stock.
@@ -2839,7 +2865,7 @@ function showLocationAlert(p, qty, area){
   const locs = otherPlaces(p.ref, inv, here);
   ov.innerHTML = `<div class="loc-alert-box">
       <div class="loc-alert-kick">⚠ ESTE ARTÍCULO VA EN OTRA UBICACIÓN</div>
-      <div class="loc-alert-prod"><img src="${p.img||''}" alt="" onerror="this.style.opacity=.2"><div><b>${p.title}</b><small>SKU ${p.ref}</small></div></div>
+      <div class="loc-alert-prod"><img src="${p.img||''}" alt="" onerror="this.src='img/mascota-rinoceronte.svg'"><div><b>${p.title}</b><small>SKU ${p.ref}</small></div></div>
       <div class="loc-alert-where">${locs.map(l=>`<div class="loc-alert-big">📍 ${formatLocationLabel(l)}</div>`).join('')}</div>
       <div class="loc-alert-here">Estás contando en: <b>${formatLocationLabel(here)}</b></div>
       <div class="loc-alert-btns">
@@ -2907,6 +2933,7 @@ function registerScan(code, qty, decided){
     if(otras.length){ showLocationAlert(p, qty, area); return; }
   }
   if(!inv.location && area.tramo && area.estante) inv.location = here;
+  if(!inv.piso && area.piso) inv.piso = area.piso;
   const esNuevoAqui = !(Number(area.counts[p.ref]) > 0);
   area.counts[p.ref] = (Number(area.counts[p.ref])||0) + qty;
   if(esNuevoAqui && etAutoPrintOn()) etPrintSku(p.ref, true);
@@ -3125,7 +3152,7 @@ function renderReceivingSession(){
   }
   const rows = receivingSessionRowsSorted();
   wrap.innerHTML = rows.map(row=>`<div class="inv-counted-row">
-      <img src="${(PRODUCTS_BY_REF[row.ref]||{}).img||''}" alt="" onerror="this.style.opacity=.25" class="open-art" onclick="openArticleDetail('${row.ref}')" title="Abrir artículo (costo y precio)">
+      <img src="${(PRODUCTS_BY_REF[row.ref]||{}).img||''}" alt="" onerror="this.src='img/mascota-rinoceronte.svg'" class="open-art" onclick="openArticleDetail('${row.ref}')" title="Abrir artículo (costo y precio)">
       <div class="inv-counted-info open-art" onclick="openArticleDetail('${row.ref}')" title="Abrir artículo (costo y precio)"><b>${row.title}</b><small>SKU ${row.ref} · 📍 ${formatLocationLabel(row.location)} · <span class="open-art-hint">✏️ costo / precio</span></small></div>
       <input type="number" min="1" class="recv-qty-input" value="${row.qty}" title="Cantidad" onchange="updateReceivingSessionQty('${row.ref}', this.value)">
       <button class="mini-btn mini-btn--del" onclick="removeReceivingSessionItem('${row.ref}')">🗑</button>
@@ -3226,7 +3253,7 @@ function renderCountedItemsList(){
     const p = PRODUCTS_BY_REF[ref];
     const qty = area.counts[ref];
     return `<div class="inv-counted-row${ref===lastAddedRef?' is-new-scan':''}">
-      <img src="${p?p.img:''}" alt="" onerror="this.style.opacity=.25" class="open-art" onclick="openArticleDetail('${ref}')" title="Abrir artículo (costo y precio)">
+      <img src="${p?p.img:''}" alt="" onerror="this.src='img/mascota-rinoceronte.svg'" class="open-art" onclick="openArticleDetail('${ref}')" title="Abrir artículo (costo y precio)">
       <div class="inv-counted-info open-art" onclick="openArticleDetail('${ref}')" title="Abrir artículo (costo y precio)"><b>${p?p.title:ref}</b><small>SKU ${ref} · <span class="open-art-hint">✏️ costo / precio</span></small></div>
       <span class="inv-counted-qty" id="cntlbl-${ref}">${qty} contados</span>
       <input type="number" min="0" step="1" value="${qty}" class="inv-remove-qty inv-set-qty" title="Cantidad contada: escribe el número y se guarda solo" oninput="scheduleSetCountQty('${ref}', this)" onchange="setCountQty('${ref}', this.value, true)" onblur="setCountQty('${ref}', this.value, true)">
@@ -3260,7 +3287,7 @@ function renderLowStockList(){
     const stock = Number(inv.stock)||0;
     const sold = Number(inv.sold)||0;
     return `<div class="inv-counted-row is-low-stock">
-      <img src="${p.img||''}" alt="" onerror="this.style.opacity=.25">
+      <img src="${p.img||''}" alt="" onerror="this.src='img/mascota-rinoceronte.svg'">
       <div class="inv-counted-info"><b>${p.title}</b><small>SKU ${p.ref}${sold>0?` · ${sold} vendidas`:''}</small></div>
       <span class="inv-lowstock-badge">BAJO STOCK</span>
       <span class="inv-counted-qty">${stock} disp.</span>
@@ -3490,7 +3517,7 @@ function renderCatalogCards(){
     const status = (Number(inv.stock)||0) > 0 ? 'Contado' : 'Pendiente';
     return `<div class="inv-article-card">
       <div class="inv-article-main" onclick="openArticleDetail('${p.ref}')">
-        <div class="inv-article-thumb"><img src="${p.img}" alt="" onerror="this.style.opacity=.25"></div>
+        <div class="inv-article-thumb"><img src="${p.img}" alt="" onerror="this.src='img/mascota-rinoceronte.svg'"></div>
         <div class="inv-article-body">
           <div class="inv-article-top">
             <b class="inv-article-sku">${p.sku}</b>
@@ -3652,7 +3679,7 @@ async function handleNewArticleImageUrl(url){
   if(!url) return;
   const wrap = document.getElementById('newArtImagePreviewWrap');
   // Mostrar vista previa inmediata mientras se descarga y se guarda como las demás fotos del sistema.
-  if(wrap) wrap.innerHTML = `<img src="${url}" alt="" onerror="this.style.opacity=.25" style="width:90px;height:90px;object-fit:contain;background:#0d1a30;border-radius:8px;padding:6px;"><small style="display:block;color:#8b96ab;font-size:.65rem;margin-top:4px;">Guardando foto…</small>`;
+  if(wrap) wrap.innerHTML = `<img src="${url}" alt="" onerror="this.src='img/mascota-rinoceronte.svg'" style="width:90px;height:90px;object-fit:contain;background:#0d1a30;border-radius:8px;padding:6px;"><small style="display:block;color:#8b96ab;font-size:.65rem;margin-top:4px;">Guardando foto…</small>`;
   try{
     const resp = await fetch(url, {mode:'cors'});
     if(!resp.ok) throw new Error('HTTP '+resp.status);
@@ -3877,13 +3904,14 @@ function renderArticleDetail(){
       <div>GTIN: ${principalGtin || 'No asignado'}</div>
     </div>
     <div class="art-head">
-      <div class="art-head-img" onclick="openZoom('${ref}')"><img src="${p.img||''}" alt="" onerror="this.style.opacity=.25"></div>
+      <div class="art-head-img" onclick="openZoom('${ref}')"><img src="${p.img||''}" alt="" onerror="this.src='img/mascota-rinoceronte.svg'"></div>
       <div class="art-head-body">
         <div class="art-head-title">${p.title}</div>
         <div class="art-head-brand">${MARCA_FIJA} · ${p.brand}</div>
         <div class="art-head-desc">${p.applications || p.cat || ''}</div>
         <div class="art-stat-row">
           <div class="art-stat-box"><span>Existencia</span><b>${inv.stock||0}</b></div>
+          ${inv.piso ? `<div class="art-stat-box art-stat-piso"><span>📍 Piso</span><b style="font-size:1.4rem;">${inv.piso}</b></div>` : ''}
           <div class="art-stat-box"><span>Ubicación actual</span><b style="font-size:.86rem;">${formatLocationLabel(inv.location)}${extraLocs(inv).map(l=>`<br><span class="extra-loc" title="Quitar esta ubicación" onclick="removeExtraLocation('${ref}','${l}')">＋ ${formatLocationLabel(l)} ✕</span>`).join('')}</b></div>
         </div>
         <div class="art-actions-row">
@@ -5157,7 +5185,7 @@ function renderTopSellers(){
     const p = PRODUCTS_BY_REF[r.ref];
     return `<div class="top-seller-row">
       <span class="rank">#${i+1}</span>
-      <img src="${p?p.img:''}" alt="" onerror="this.style.opacity=.25">
+      <img src="${p?p.img:''}" alt="" onerror="this.src='img/mascota-rinoceronte.svg'">
       <b>${r.title} <small style="color:#8b96ab;">(${r.ref})</small></b>
       <span>${r.qty} vendidos</span>
     </div>`;

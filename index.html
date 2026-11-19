@@ -459,12 +459,20 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
         <button class="mini-btn mini-btn--del" onclick="removeActiveArea()">🗑 Eliminar área</button>
         <button class="mini-btn mini-btn--del" onclick="clearActiveCount()">⟲ Borrar conteo</button>
         <div class="inv-area-fields">
+          <label class="inv-piso-label">Piso<select id="pisoInput" onchange="commitPiso(this.value)">
+            <option value="1">Piso 1</option>
+            <option value="2">Piso 2</option>
+            <option value="3">Piso 3</option>
+            <option value="4">Piso 4</option>
+          </select></label>
           <label>Tramo<input type="text" id="tramoInput" placeholder="T04"></label>
           <label>Estante<input type="text" id="estanteInput" placeholder="2A1"></label>
         </div>
       </div>
+      <p class="inv-section-sub" style="margin-top:6px;">📍 El <b>Piso</b> se queda seleccionado mientras vayas escaneando — no hay que tocarlo hasta que cambies de piso de verdad.</p>
       <button class="mini-btn" onclick="addCountArea()">+ Agregar otra área</button>
       <button class="mini-btn" onclick="organizarUbicaciones()" title="Arma la lista con las ubicaciones de los artículos, ordenada y sin repetidas">⇅ Organizar ubicaciones</button>
+      <button class="mini-btn" onclick="migrarPiso2()" title="Marca Piso 2 en todos los artículos ya registrados que todavía no tienen piso asignado">📍 Marcar Piso 2 a lo ya registrado</button>
     </div>
 
     <div class="inv-section-box">

@@ -109,10 +109,15 @@ nav button.on span{transform:scale(1.1)}
 #sheet{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:25;display:none;align-items:flex-end}
 #sheet.on{display:flex}
 #sheet .in{background:var(--card);width:100%;max-height:88vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom))}
-#sheet img{width:100%;max-height:220px;object-fit:contain;background:#fff;border-radius:12px}
+#sheet img{width:100%;max-height:220px;object-fit:contain;background:#fff;border-radius:12px;cursor:zoom-in}
 #sheet table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}
 #sheet td{padding:7px 4px;border-bottom:1px solid var(--line);vertical-align:top}
 #sheet td:first-child{color:var(--mut);width:38%}
+#mZoomOv{position:fixed;inset:0;background:rgba(2,4,9,.94);z-index:60;display:none;align-items:center;justify-content:center;padding:18px;touch-action:none}
+#mZoomOv.on{display:flex}
+#mZoomOv img{max-width:92vw;max-height:88vh;object-fit:contain;transition:transform .18s ease-out;transform-origin:center;cursor:zoom-in}
+#mZoomOv img.z2{transform:scale(1.8);cursor:zoom-out}
+#mZoomOv img.z3{transform:scale(2.6);cursor:zoom-out}
 .area-row{display:flex;gap:8px}
 .area-row select{flex:1}
 .note{font-size:12px;color:var(--mut);margin-top:8px}
@@ -154,6 +159,9 @@ nav button.on span{transform:scale(1.1)}
       </div>
       <div class="kick" style="margin-top:12px">Nueva ubicación</div>
       <div class="locin">
+        <label>Piso<select id="nPiso" style="background:linear-gradient(135deg,#ffb020,#ff7a1a);color:#1a0e00;font-weight:800">
+          <option value="1">1</option><option value="2" selected>2</option><option value="3">3</option><option value="4">4</option>
+        </select></label>
         <label>Tramo<input id="nTramo" type="text" autocomplete="off" autocapitalize="characters" placeholder="Ej. 3" enterkeyhint="next"></label>
         <label>Estante<input id="nEst" type="text" autocomplete="off" autocapitalize="characters" placeholder="Ej. 2" enterkeyhint="done"></label>
         <button id="areaNew">＋ Agregar</button>
@@ -220,6 +228,7 @@ nav button.on span{transform:scale(1.1)}
 </nav>
 
 <div id="sheet"><div class="in" id="sheetIn"></div></div>
+<div id="mZoomOv" onclick="mZoomClose()"><img id="mZoomImg" src="" alt="" onclick="event.stopPropagation();mZoomCycle()"></div>
 <div id="toast"></div>
 
 <script>
@@ -335,7 +344,7 @@ function hasLongerCode(code){
 }
 function imgOf(p){ if(p && p.img === '__srv__') return cfg.url + '/api/' + APP + '/foto/' + encodeURIComponent(p.ref); if(p && p.img) return p.img; return `https://dieseltechnic.tiny.pictures/0355/${String(p.ref).replace(/\./g,'_')}_0.jpg?format=webp&width=240`; }
 const locLabel = l=>{ if(!l) return 'Pendiente'; const m = /^([^/]+)\/([^/]+)$/.exec(l); return m ? `Tramo ${m[1]} · Estante ${m[2]}` : l; };
-const PH = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56"><rect width="56" height="56" fill="#e5e7eb"/><path d="M16 36l8-10 6 7 4-5 6 8z" fill="#9ca3af"/></svg>');
+const PH = '../img/mascota-rinoceronte.svg';
 
 /* ---------- servidor ---------- */
 /* Dos servidores: SAMBOY1 (principal) y SAMBOY2 (respaldo). Si SAMBOY1 no responde se pasa
@@ -384,11 +393,17 @@ function cambiar(u, msg){
     if(cfg.token){ connectLive(); pull(); runOps(); }
   } finally { _srvCambiando = false; }
 }
-async function api(method, path, body){
+async function api(method, path, body, _retried401){
   let r;
   try{ r = await fetch(cfg.url + '/api/' + APP + path, {method, cache:'no-store', headers:{'Authorization':'Bearer '+cfg.token, 'Content-Type':'application/json', 'X-Equipo':cfg.equipo}, body: body === undefined ? undefined : JSON.stringify(body)}); }
   catch(e){ const er = new Error('Sin conexión'); er.offline = true; throw er; }
-  if(r.status === 401){ const er = new Error('Sesión vencida'); er.auth = true; throw er; }
+  if(r.status === 401){
+    // Un 401 puede ser momentáneo (el servidor se reinició, o el respaldo todavía no tiene la
+    // sesión al día) y no que la sesión de verdad venció — antes de cerrar sesión, reintentar
+    // una vez tras una pequeña pausa; solo si se repite se considera sesión vencida de verdad.
+    if(!_retried401){ await new Promise(res=>setTimeout(res, 1200)); return api(method, path, body, true); }
+    const er = new Error('Sesión vencida'); er.auth = true; throw er;
+  }
   const j = await r.json().catch(()=>({}));
   if(!r.ok && r.status !== 409 && r.status !== 404) throw new Error(j.error || ('Servidor ' + r.status));
   j._status = r.status; return j;
@@ -414,7 +429,7 @@ const OPS = {
   count: {
     meta(m, o){ m = m || META_DEF(); m.countAreas = m.countAreas || [];
       let a = m.countAreas.find(x=>x.tramo === o.tramo && x.estante === o.estante);
-      if(!a){ a = {tramo:o.tramo, estante:o.estante, counts:{}}; m.countAreas.push(a); }
+      if(!a){ a = {piso:o.piso||'2', tramo:o.tramo, estante:o.estante, counts:{}}; m.countAreas.push(a); }
       a.counts = a.counts || {}; a.counts[o.ref] = (Number(a.counts[o.ref])||0) + o.qty;
       if(a.counts[o.ref] <= 0) delete a.counts[o.ref];
       if(o.qty > 0){ m.scanHistory = [{time:o.time, ref:o.ref, title:o.title, stock:o.stock, qty:o.qty}].concat(m.scanHistory||[]).slice(0,50); }
@@ -423,6 +438,7 @@ const OPS = {
       if(o.locMode === 'both'){ if(!r.location && o.primera && o.primera !== here) r.location = o.primera; if(r.location && r.location !== here){ r.extraLocations = [...new Set((r.extraLocations||[]).concat([here]))]; } else r.location = here; }
       else if(o.locMode === 'move'){ r.location = here; r.extraLocations = (r.extraLocations||[]).filter(l=>l !== here); }
       else if(!r.location) r.location = here;
+      if(!r.piso && o.piso) r.piso = o.piso;
       return r; }
   },
   // fijar la cantidad contada (lo que se escribe en la lista)
@@ -432,7 +448,7 @@ const OPS = {
       if(!a){ if(o.n <= 0) return m; a = {tramo:o.tramo, estante:o.estante, counts:{}}; m.countAreas.push(a); }
       a.counts = a.counts || {}; if(o.n <= 0) delete a.counts[o.ref]; else a.counts[o.ref] = o.n; return m; }
   },
-  newArea: { meta(m, o){ m = m || META_DEF(); m.countAreas = m.countAreas || []; if(!m.countAreas.find(x=>x.tramo===o.tramo && x.estante===o.estante)) m.countAreas.push({tramo:o.tramo, estante:o.estante, counts:{}}); return m; } },
+  newArea: { meta(m, o){ m = m || META_DEF(); m.countAreas = m.countAreas || []; if(!m.countAreas.find(x=>x.tramo===o.tramo && x.estante===o.estante)) m.countAreas.push({piso:o.piso||'2', tramo:o.tramo, estante:o.estante, counts:{}}); return m; } },
   // recepción de mercancía
   recv: { rec(d, o){ d = d || {items:[], startedAt:null}; d.items = d.items || [];
       if(!d.items.length) d.startedAt = o.at;
@@ -536,7 +552,7 @@ function connectLive(){
 
 /* ---------- escanear ---------- */
 let currentTab = 'bus';
-function areaSel(){ const v = $('areaSel').value; if(!v) return null; const [tramo, estante] = JSON.parse(v); return {tramo, estante}; }
+function areaSel(){ const v = $('areaSel').value; if(!v) return null; const [tramo, estante] = JSON.parse(v); const vw = view(); const ar = vw.meta && vw.meta.countAreas && vw.meta.countAreas.find(x=>x.tramo===tramo && x.estante===estante); return {tramo, estante, piso: ar && ar.piso}; }
 function handleCode(code, source){
   code = String(code||'').trim(); if(!code) return;
   const p = findByCode(code);
@@ -550,7 +566,7 @@ function handleCode(code, source){
     const v = view(); const row = v.inv[p.ref]; const here = a.tramo + '/' + a.estante;
     const ar = v.meta && v.meta.countAreas && v.meta.countAreas.find(x=>x.tramo === a.tramo && x.estante === a.estante);
     const yaAqui = ar && ar.counts && Number(ar.counts[p.ref]) > 0;
-    const op = {t:'count', ref:p.ref, qty, tramo:a.tramo, estante:a.estante, title:p.title, stock:row ? row.stock : 0, time: now.toLocaleTimeString('es-DO',{hour:'2-digit',minute:'2-digit',second:'2-digit'})};
+    const op = {t:'count', ref:p.ref, qty, piso:a.piso, tramo:a.tramo, estante:a.estante, title:p.title, stock:row ? row.stock : 0, time: now.toLocaleTimeString('es-DO',{hour:'2-digit',minute:'2-digit',second:'2-digit'})};
     if(locAlertOp){ beep(false); toast('Primero elige qué hacer con la alerta de ubicación.', 'bad'); return; }
     // lugares donde ya está: ubicaciones guardadas + áreas donde está contado sin cerrar
     const lugares = locsOf(row); ((v.meta && v.meta.countAreas) || []).forEach(x=>{ const k = x.tramo + '/' + x.estante; if(x.counts && Number(x.counts[p.ref]) > 0 && !lugares.includes(k)) lugares.push(k); });
@@ -920,7 +936,7 @@ function render(){
   // áreas
   const sel = $('areaSel'); const keep = cfg.area || load(LS.area, null);
   const areas = ((v.meta && v.meta.countAreas) || []).filter(a=>a.tramo || a.estante);
-  const opts = areas.map(a=>{ const k = JSON.stringify([a.tramo, a.estante]); const n = Object.values(a.counts||{}).reduce((s,x)=>s+(Number(x)||0),0); return `<option value='${esc(k)}'>Tramo ${esc(a.tramo)} · Estante ${esc(a.estante)}${n ? ` (${n})` : ''}</option>`; });
+  const opts = areas.map(a=>{ const k = JSON.stringify([a.tramo, a.estante]); const n = Object.values(a.counts||{}).reduce((s,x)=>s+(Number(x)||0),0); return `<option value='${esc(k)}'>Piso ${esc(a.piso||'—')} · Tramo ${esc(a.tramo)} · Estante ${esc(a.estante)}${n ? ` (${n})` : ''}</option>`; });
   const html = (opts.length ? '' : `<option value="">— Crea un área con ＋ Nueva —</option>`) + opts.join('');
   if(sel.innerHTML !== html){ sel.innerHTML = html; }
   if(keep && areas.find(a=>JSON.stringify([a.tramo,a.estante]) === keep)) sel.value = keep;
@@ -997,7 +1013,7 @@ function openDetail(ref){
   const p = BY_REF[ref]; if(!p) return; const v = view(); const row = v.inv[ref] || {}; const ic = (v.meta && v.meta.internalCodes) || {};
   if(isGuest()){
     const n = stockOf(ref); const codes = [...new Set([p.gtin, ...(GTIN_ALT[ref]||[])].filter(Boolean))];
-    $('sheetIn').innerHTML = `<img src="${esc(imgOf(p).replace('width=240','width=600'))}" onerror="this.src='${PH}'">
+    $('sheetIn').innerHTML = `<img src="${esc(imgOf(p).replace('width=240','width=600'))}" onerror="this.src='${PH}'" onclick="mZoomOpen(this.src)">
       <h3 style="margin:12px 0 2px">${esc(p.title)}</h3><div class="mut">${esc(p.brand)} · ${esc(p.cat)} · ${esc(ref)}</div>
       <div class="locbig${n > 0 ? '' : ' none'}"><span>${n > 0 ? '✅' : '⛔'}</span><div><small>DISPONIBILIDAD</small><b>${n > 0 ? 'En stock' : 'Agotado'}</b></div><div class="st"><small>UNIDADES</small><b>${n}</b></div></div>
       <table><tr><td>Referencia / SKU</td><td><b>${esc(ref)}</b></td></tr>
@@ -1010,8 +1026,9 @@ function openDetail(ref){
   }
   const codes = [...new Set([p.gtin, row.gtin, ...(row.altCodes||[]), ...(GTIN_ALT[ref]||[])].filter(Boolean))];
   const money = x=> x === '' || x == null ? '—' : 'US$ ' + Number(x).toLocaleString('es-DO', {minimumFractionDigits:2, maximumFractionDigits:2});
-  $('sheetIn').innerHTML = `<img src="${esc(imgOf(p).replace('width=240','width=600'))}" onerror="this.src='${PH}'">
+  $('sheetIn').innerHTML = `<img src="${esc(imgOf(p).replace('width=240','width=600'))}" onerror="this.src='${PH}'" onclick="mZoomOpen(this.src)">
     <h3 style="margin:12px 0 2px">${esc(p.title)}</h3><div class="mut">${esc(p.brand)} · ${esc(p.cat)} · ${esc(ref)}</div>
+    ${row.piso ? `<div class="locbig" style="background:linear-gradient(135deg,#ffb020,#ff7a1a);border:none"><span>📍</span><div><small style="color:#2a1500">PISO</small><b style="color:#1a0e00;font-size:22px">${esc(String(row.piso))}</b></div></div>` : ''}
     <div class="locbig${(Number(row.stock)||0) > 0 ? '' : ' none'}"><span>${(Number(row.stock)||0) > 0 ? '✅' : '⛔'}</span><div><small>DISPONIBILIDAD</small><b>${(Number(row.stock)||0) > 0 ? 'Disponible' : 'Agotado'}</b></div><div class="st"><small>DISPONIBLE</small><b>${Number(row.stock)||0}</b></div></div>
     <div class="locbig${row.location ? '' : ' none'}"><span>📍</span><div><small>UBICACIÓN</small><b>${locsOf(row).length ? locsOf(row).map(l=>esc(locLabel(l))).join('<br>') : esc(locLabel(''))}</b></div><div class="st"><small>STOCK</small><b>${Number(row.stock)||0}</b></div></div>
     <table>
@@ -1173,6 +1190,17 @@ async function doLogin(){
   }catch(e){ $('loginErr').textContent = 'No hay conexión con el servidor de la PC.'; }
   finally{ $('lbtn').disabled = false; }
 }
+let mZoomLevel = 1;
+function mZoomOpen(src){
+  if(!src) return;
+  const img = $('mZoomImg'); img.src = src; img.className = ''; mZoomLevel = 1;
+  $('mZoomOv').classList.add('on');
+}
+function mZoomClose(){ $('mZoomOv').classList.remove('on'); }
+function mZoomCycle(){
+  mZoomLevel = mZoomLevel >= 3 ? 1 : mZoomLevel + 1;
+  $('mZoomImg').className = mZoomLevel === 2 ? 'z2' : mZoomLevel === 3 ? 'z3' : '';
+}
 function doLogout(){
   if(isGuest()){ cfg.guest = false; save(LS.cfg, cfg); $('login').style.display = 'flex'; return; }
   if(ops.length && !confirm(`Hay ${ops.length} lectura(s) sin subir todavía. Si sales ahora se suben cuando vuelvas a entrar. ¿Salir?`)) return;
@@ -1219,12 +1247,12 @@ $('areaSel').onchange = ()=>{ cfg.area = $('areaSel').value; save(LS.cfg, cfg); 
 $('nTramo').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); $('nEst').focus(); } });
 $('nEst').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); $('areaNew').click(); } });
 $('areaNew').onclick = ()=>{
-  const tramo = $('nTramo').value.trim(), estante = $('nEst').value.trim();
+  const piso = $('nPiso').value, tramo = $('nTramo').value.trim(), estante = $('nEst').value.trim();
   if(!tramo){ toast('Escribe el tramo.', 'bad'); $('nTramo').focus(); return; }
   if(!estante){ toast('Escribe el estante.', 'bad'); $('nEst').focus(); return; }
   $('nTramo').value = ''; $('nEst').value = ''; $('inInv').focus();
   cfg.area = JSON.stringify([tramo, estante]); save(LS.cfg, cfg);
-  queue({t:'newArea', tramo, estante}); toast(`Área Tramo ${tramo} · Estante ${estante}`, 'good');
+  queue({t:'newArea', piso, tramo, estante}); toast(`Piso ${piso} · Tramo ${tramo} · Estante ${estante}`, 'good');
 };
 autoScan($('inInv'), c=>handleCode(c, 'teclado'));
 autoScan($('inRec'), c=>handleCode(c, 'teclado'));

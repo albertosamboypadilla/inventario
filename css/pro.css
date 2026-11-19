@@ -322,6 +322,11 @@ html.pro .fx-stk, html.pro .fx-loc { display: flex; align-items: center; gap: 16
 html.pro .fx-stk b, html.pro .fx-loc b { display: block; font: 700 16px var(--p-f); color: var(--fx-w); }
 html.pro .fx-loc b.x { font-size: 13.5px; color: var(--fx-m); margin-top: 4px; } html.pro .fx-loc b.pend { color: var(--fx-amb); }
 html.pro .fx-stk small, html.pro .fx-loc small { display: block; font-size: 13px; color: var(--fx-m); margin-top: 3px; }
+html.pro .fx-piso { background: linear-gradient(135deg, #ffb020, #ff7a1a) !important; border: none !important; }
+html.pro .fx-piso .fx-ch span { color: #2a1500 !important; opacity: .85; }
+html.pro .fx-piso-n { display: flex; align-items: center; gap: 12px; }
+html.pro .fx-piso-n b { font-size: 34px !important; font-weight: 800 !important; color: #1a0e00 !important; line-height: 1; }
+html.pro .fx-piso-n small { color: #2a1500 !important; font-weight: 700; }
 html.pro .fx-ring { width: 84px; height: 84px; flex: none; }
 html.pro .fx-ring circle { fill: none; stroke-width: 8; stroke-linecap: round; }
 html.pro .fx-ring-bg { stroke: var(--fx-row); }
