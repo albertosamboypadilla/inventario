@@ -1767,8 +1767,10 @@ body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
     if(b.dataset.a === 'bs'){ pararRep(); borrar(); repT = setTimeout(()=>{ rep = setInterval(borrar, 90); }, 450); return; }
     accion(b);
   }, {passive:false});
-  ['touchend','touchcancel'].forEach(t=>pad.addEventListener(t, pararRep));
-  pad.addEventListener('click', e=>{ if(Date.now() - ultToque < 600) return; const b = e.target.closest('button'); if(b) accion(b); });
+  // en el iPhone el toque también manda un "click" después: se cancela para que 123/ABC no cambie dos veces
+  pad.addEventListener('touchend', e=>{ pararRep(); if(e.target.closest('button')) e.preventDefault(); }, {passive:false});
+  pad.addEventListener('touchcancel', pararRep);
+  pad.addEventListener('click', e=>{ if(Date.now() - ultToque < 1500) return; const b = e.target.closest('button'); if(b) accion(b); });
   function accion(b){
     if(!b || !campo || b.disabled) return;
     const a = b.dataset.a, c = b.dataset.c;
