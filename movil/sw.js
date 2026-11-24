@@ -1,6 +1,6 @@
 // Guarda la app, el catálogo y las fotos en el celular para que abra rápido y funcione sin
 // internet en la zona del almacén (una vez que ya se vieron, quedan guardadas).
-const VERSION = 'etm-v34';
+const VERSION = 'etm-v35';
 const FOTOS = 'etm-fotos-v1';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'catalogo.json', '../img/mascota-rinoceronte.svg'];
 self.addEventListener('install', e=>{ e.waitUntil(caches.open(VERSION).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())); });

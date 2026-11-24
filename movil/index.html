@@ -278,7 +278,7 @@ function locsOf(row){ const out = []; if(row && row.location) out.push(row.locat
 function locsLabel(row){ const l = locsOf(row); return l.length ? l.map(locLabel).join('  ＋  ') : 'Sin ubicación'; }
 function setChip(state, txt){ const c = $('chip'); c.className = 'chip ' + state; c.textContent = txt; }
 function refreshChip(){
-  if(!navigator.onLine) return setChip('off', ops.length ? `⚠ Sin internet · ${ops.length} pendiente(s)` : '⚠ Sin internet');
+  if(!navigator.onLine){ let ne = 0; try{ ne = JSON.parse(localStorage.getItem('et_cola_v1') || '[]').length; }catch(e){} return setChip('off', '⚠ Sin internet' + (ops.length ? ` · ${ops.length} pendiente(s)` : '') + (ne ? ` · 🖨 ${ne}` : '')); }
   if(ops.length) return setChip('saving', `☁️ Guardando ${ops.length}…`);
   setChip('ok', '☁️ En línea');
 }
@@ -689,17 +689,43 @@ function etDataFor(ref){ const p = BY_REF[ref] || {ref, refs:[]}; const v = view
   return {sku: p.ref, title: p.title || '', brand: p.brand || '', barcode: ic[ref] || '', oe: (p.refs || [])[0] || (row.oeRefs || [])[0] || ''}; }
 function etRefreshPreviews(){ const d = {sku:'1.24265', title:'Torica, bomba de aceite', brand:'Scania', barcode:'00123', oe:'Scania:1411851'};
   document.querySelectorAll('.et-prev-wrap').forEach(w=>w.innerHTML = '<small>Vista previa (2" x 1"):</small>' + etPreviewHtml(d)); }
+// ---- impresión de etiquetas: si no hay conexión, quedan en cola y se imprimen solas al volver ----
+const ET_COLA = 'et_cola_v1';
+function etCola(){ try{ return JSON.parse(localStorage.getItem(ET_COLA) || '[]'); }catch(e){ return []; } }
+function etGuardarCola(c){ try{ localStorage.setItem(ET_COLA, JSON.stringify(c)); }catch(e){} try{ refreshChip(); }catch(e){} }
+async function etEnviar(ref, copias){
+  const p = BY_REF[ref]; let data = etDataFor(ref); if(!p && !data.title) data.title = '';
+  if(etFields().barcode && !data.barcode){
+    const r = await fetch(cfg.url + '/api/' + APP + '/codigos', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({refs:[ref]})});
+    const j = await r.json().catch(()=>({})); if(j.codes && j.codes[ref]){ data.barcode = j.codes[ref]; try{ cache.meta = cache.meta || {}; cache.meta.internalCodes = Object.assign({}, cache.meta.internalCodes, {[ref]: j.codes[ref]}); }catch(e){} }
+  }
+  const r = await fetch(cfg.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({zpl: etLabelZpl(data, copias)})});
+  const j = await r.json().catch(()=>({})); if(!r.ok){ const e = new Error(j.error || ('error ' + r.status)); e.server = true; throw e; }
+}
 async function etPrintSku(ref, auto){
   const p = BY_REF[ref]; if(!p) return;
-  let data = etDataFor(ref);
-  if(etFields().barcode && !data.barcode && cfg.token){ try{ const r = await fetch(cfg.url + '/api/' + APP + '/codigos', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({refs:[ref]})}); const j = await r.json(); if(j.codes && j.codes[ref]) data.barcode = j.codes[ref]; }catch(e){} }
-  if(!cfg.token || !navigator.onLine){ if(!auto) toast('Para imprimir necesitas internet y sesión iniciada.', 'bad'); return; }
-  try{
-    const r = await fetch(cfg.url + '/api/imprimir', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body: JSON.stringify({zpl: etLabelZpl(data, auto ? etCopies() : 1)})});
-    const j = await r.json().catch(()=>({})); if(!r.ok) throw new Error(j.error || ('error ' + r.status));
-    if(!auto) toast('🖨 Etiqueta impresa: ' + p.ref, 'ok');
-  }catch(e){ beep(false); toast('🖨 No se pudo imprimir: ' + e.message, 'bad'); }
+  if(!cfg.token){ if(!auto) toast('Para imprimir inicia sesión.', 'bad'); return; }
+  const copias = auto ? etCopies() : 1;
+  const aCola = ()=>{ const c = etCola(); c.push({ref, copias, at:Date.now()}); etGuardarCola(c); if(!auto) toast('🖨 Sin conexión: la etiqueta de ' + p.ref + ' se imprime sola al volver la señal.', 'ok'); };
+  if(!navigator.onLine || etCola().length){ aCola(); etVaciarCola(); return; }   // respeta el orden si ya hay pendientes
+  try{ await etEnviar(ref, copias); if(!auto) toast('🖨 Etiqueta impresa: ' + p.ref, 'ok'); }
+  catch(e){ if(e.server){ beep(false); toast('🖨 No se pudo imprimir: ' + e.message, 'bad'); } else aCola(); }
 }
+let etVaciando = false;
+async function etVaciarCola(){
+  if(etVaciando || !cfg.token || !navigator.onLine) return; let c = etCola(); if(!c.length) return; etVaciando = true; let n = 0;
+  try{
+    while(c.length){ const it = c[0];
+      try{ await etEnviar(it.ref, it.copias); n++; }
+      catch(e){ if(!e.server) break; toast('🖨 No se pudo imprimir ' + it.ref + ': ' + e.message, 'bad'); }   // error de la impresora: se descarta para no trancar la cola
+      c = etCola(); c.shift(); etGuardarCola(c);
+    }
+  } finally { etVaciando = false; }
+  if(n) toast('🖨 Se imprimieron ' + n + ' etiqueta(s) pendientes.', 'good');
+}
+window.addEventListener('online', ()=> setTimeout(etVaciarCola, 1500));
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) setTimeout(etVaciarCola, 1500); });
+setInterval(etVaciarCola, 20000);
 function showLast(kind, p){
   const v = view(); let n = 0, label = '';
   if(kind === 'inv'){ const a = areaSel(); const ar = v.meta && v.meta.countAreas && v.meta.countAreas.find(x=>x.tramo===a.tramo && x.estante===a.estante); n = ar && ar.counts ? (ar.counts[p.ref]||0) : 0; label = 'en esta área'; }
