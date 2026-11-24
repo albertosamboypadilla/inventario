@@ -993,7 +993,12 @@ function render(){
   const v = view();
   // áreas
   const sel = $('areaSel'); const keep = cfg.area || load(LS.area, null);
-  const areas = ((v.meta && v.meta.countAreas) || []).filter(a=>a.tramo || a.estante);
+  const areas = ((v.meta && v.meta.countAreas) || []).filter(a=>a.tramo || a.estante).slice();
+  { const ya = new Set(areas.map(a=>a.tramo + '/' + a.estante)); const add = (l, piso)=>{ const m = /^([^/]+)\/([^/]+)$/.exec(String(l||'').trim()); if(!m) return; const k = m[1] + '/' + m[2]; if(ya.has(k)) return; ya.add(k); areas.push({piso: piso || '', tramo:m[1], estante:m[2], counts:{}}); };
+    ((v.meta && v.meta.locations) || []).forEach(l=>add(l));
+    Object.values(v.inv || {}).forEach(r=>{ if(!r) return; add(r.location, r.piso); (r.extraLocations || []).forEach(l=>add(l, r.piso)); });
+    const nat = (a, b)=> String(a).localeCompare(String(b), 'es', {numeric:true, sensitivity:'base'});
+    areas.sort((a, b)=> nat(a.tramo, b.tramo) || nat(a.estante, b.estante)); }
   const opts = areas.map(a=>{ const k = JSON.stringify([a.tramo, a.estante]); const n = Object.values(a.counts||{}).reduce((s,x)=>s+(Number(x)||0),0); return `<option value='${esc(k)}'>Piso ${esc(a.piso||'—')} · Tramo ${esc(a.tramo)} · Estante ${esc(a.estante)}${n ? ` (${n})` : ''}</option>`; });
   const html = (opts.length ? '' : `<option value="">— Crea un área con ＋ Nueva —</option>`) + opts.join('');
   if(sel.innerHTML !== html){ sel.innerHTML = html; }
@@ -1701,6 +1706,10 @@ html,body{overflow-x:hidden}
 #etkPad .np button.vac{background:transparent;box-shadow:none}
 #etkPad .np button.bs{background:transparent;box-shadow:none;font-size:24px}
 body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
+body.etk-pad-on #sheet .in{margin-bottom:var(--etk-h,300px);max-height:calc(100vh - var(--etk-h,300px) - 10px)!important}
+body.etk-pad-on #naOv{padding-bottom:calc(var(--etk-h,300px) + 20px)}
+body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
+#etkPad,#etkPad *{-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
 #areaSel.etk-oculto{display:none}
 #etkAreaBtn{width:100%;text-align:left;padding:14px 44px 14px 14px;border-radius:14px;border:1px solid rgba(255,195,0,.45);background:rgba(0,0,0,.35);color:#fff;font-size:17px;font-weight:700;line-height:1.35;white-space:normal;position:relative}
 #etkAreaBtn:after{content:'▾';position:absolute;right:14px;top:50%;transform:translateY(-50%);color:#ffb020;font-size:20px}
@@ -1728,6 +1737,7 @@ body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
      Al tocar un campo esperamos un momento: si el teclado del iPhone salió, todo normal;
      si no salió, la pistola está conectada y ponemos nuestro teclado igualito al del iPhone. */
   let pistola = false;
+  const marcar = v=>{ pistola = v; };
   const altoBase = ()=> window.innerHeight;
   const tecladoNativoAbierto = ()=> window.visualViewport ? (window.visualViewport.height < altoBase() * 0.78) : false;
 
@@ -1741,7 +1751,7 @@ body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
   };
   const k = (t, cls, data)=>`<button type="button" class="k ${cls||''}" ${data||''}>${t}</button>`;
   function pintar(){
-    const bar = `<div class="bar"><button type="button" data-a="listo">Listo</button></div>`;
+    const bar = `<div class="bar" style="justify-content:space-between"><button type="button" data-a="nativo" style="color:#8e8e93;font-weight:500;font-size:14px">Quité la pistola</button><button type="button" data-a="listo">Listo</button></div>`;
     if(esNum(campo)){
       const dec = !(campo.step === '1' || /qty|Stock|copies/i.test(campo.id||'') || campo.className.includes('copies'));
       const t = [['1',''],['2','ABC'],['3','DEF'],['4','GHI'],['5','JKL'],['6','MNO'],['7','PQRS'],['8','TUV'],['9','WXYZ']];
@@ -1773,7 +1783,7 @@ body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
     mayus = !el.value && el.getAttribute('autocapitalize') !== 'none'; bloqMayus = el.getAttribute('autocapitalize') === 'characters';
     if(bloqMayus) mayus = true;
     el.setAttribute('inputmode','none'); pad.hidden = false; document.body.classList.add('etk-pad-on'); pintar();
-    setTimeout(()=>el.scrollIntoView({block:'center', behavior:'smooth'}), 60);
+    setTimeout(()=>{ try{ el.scrollIntoView({block:'center'}); const r = el.getBoundingClientRect(), top = window.innerHeight - (pad.offsetHeight || 300); if(r.bottom > top - 10){ const sc = el.closest('#sheet .in, #naOv, #etkArea ul'); (sc || document.scrollingElement).scrollTop += r.bottom - top + 30; } }catch(_){} }, 80);
   }
   function cerrar(){ pararRep(); if(campo) campo.removeAttribute('inputmode'); pad.hidden = true; document.body.classList.remove('etk-pad-on'); campo = null; }
   pad.addEventListener('pointerdown', e=>e.preventDefault());
@@ -1796,6 +1806,7 @@ body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
     else if(a === 'sp'){ poner(valor() + ' '); if(capa !== 'abc'){ capa = 'abc'; pintar(); } }
     else if(a === 'sh'){ mayus = !mayus; pintar(); }
     else if(a === 'num' || a === 'sim' || a === 'abc'){ capa = a; pintar(); }
+    else if(a === 'nativo'){ const el = campo; marcar(false); cerrar(); el.removeAttribute('inputmode'); el.blur(); setTimeout(()=>el.focus(), 80); }
     else if(a === 'listo'){ const el = campo; cerrar(); el.dispatchEvent(new Event('change', {bubbles:true})); el.blur(); }
     else if(a === 'ok'){
       const el = campo;
@@ -1824,15 +1835,15 @@ body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
     el.removeAttribute('inputmode');                    // dejar que el iPhone intente sacar su teclado
     chequeo = setTimeout(()=>{
       if(document.activeElement !== el) return;
-      if(tecladoNativoAbierto()){ pistola = false; return; }   // salió el teclado del iPhone: normal
-      pistola = true; abrir(el);                                 // no salió: la pistola está conectada
+      if(tecladoNativoAbierto()){ marcar(false); return; }   // salió el teclado del iPhone: normal
+      marcar(true); abrir(el);                                 // no salió: la pistola está conectada
     }, 550);
   });
   // si la pistola está "conectada" pero el iPhone saca su teclado → la quitaron: volver a normal
-  if(window.visualViewport) window.visualViewport.addEventListener('resize', ()=>{ if(tecladoNativoAbierto() && pistola){ pistola = false; if(campo){ const el = campo; cerrar(); el.blur(); setTimeout(()=>el.focus(), 50); } } });
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', ()=>{ if(tecladoNativoAbierto() && pistola){ marcar(false); if(campo){ const el = campo; cerrar(); el.blur(); setTimeout(()=>el.focus(), 50); } } });
   // lecturas rápidas de la pistola = está conectada
   let ult = 0, rap = 0;
-  document.addEventListener('keydown', e=>{ if(!e.isTrusted || !e.key || e.key.length !== 1) return; const t = Date.now(); rap = (t - ult < 50) ? rap + 1 : 0; ult = t; if(rap >= 3 && !tecladoNativoAbierto()) pistola = true; }, true);
+  document.addEventListener('keydown', e=>{ if(!e.isTrusted || !e.key || e.key.length !== 1) return; const t = Date.now(); rap = (t - ult < 50) ? rap + 1 : 0; ult = t; if(rap >= 3 && !tecladoNativoAbierto()) marcar(true); }, true);
   // al tocar un campo cuando ya está la pistola, el iPhone no debe intentar su teclado
   document.addEventListener('touchstart', e=>{ if(pistola && editable(e.target)) e.target.setAttribute('inputmode','none'); }, {passive:true, capture:true});
 
