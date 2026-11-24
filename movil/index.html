@@ -490,6 +490,8 @@ const OPS = {
 };
 // poner costo y/o precio de un artículo
 OPS.setEdit = { inv(r, o){ r = r || defaultRow(o.ref); r.edit = Object.assign({}, r.edit || {}, o.edit, {editado: new Date().toISOString(), por: cfg.usuario}); if(r.product && o.edit.title) r.product.title = o.edit.title; return r; } };
+OPS.addGtin = { inv(r, o){ r = r || defaultRow(o.ref); const all = new Set([r.gtin, ...(r.altCodes||[])].filter(Boolean)); const alt = (r.altCodes||[]).slice();
+  o.codes.forEach(c=>{ if(all.has(c)) return; if(!r.gtin) r.gtin = c; else alt.push(c); all.add(c); }); r.altCodes = alt; if(r.product && !r.product.gtin) r.product.gtin = r.gtin; return r; } };
 OPS.setOe = { inv(r, o){ r = r || defaultRow(o.ref); r.oeRefs = o.oeRefs.slice(); if(r.product) r.product.refs = o.oeRefs.slice(); return r; } };
 OPS.setStock = {
   meta(m, o){ m = m || {}; m.inventoryEntriesLog = [{id: o.id, date: o.at, area: 'Ajuste de stock', user: o.by, origen: 'celular', items: [{ref: o.ref, title: o.title, qty: o.diff, location: o.loc || ''}]}].concat((m.inventoryEntriesLog || []).filter(e=>e.id !== o.id)).slice(0, 500); return m; },
@@ -584,7 +586,7 @@ function areaSel(){ const v = $('areaSel').value; if(!v) return null; const [tra
 function handleCode(code, source){
   code = String(code||'').trim(); if(!code) return;
   const p = findByCode(code);
-  if(currentTab === 'bus'){ $('inBus').value = code; doSearch(); if(p){ beep(true); openDetail(p.ref); if(isPrincipal()) setTimeout(()=> openEditBox(true), 200); } else { beep(false); toast(lastAmbiguous ? `${code} es referencia original de varios artículos. Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); } return; }
+  if(currentTab === 'bus'){ $('inBus').value = code; doSearch(); setTimeout(()=>{ $('inBus').value = ''; }, 50); if(p){ beep(true); openDetail(p.ref); if(isPrincipal()) setTimeout(()=> openEditBox(true), 200); } else { beep(false); toast(lastAmbiguous ? `${code} es referencia original de varios artículos. Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); } return; }
   if(!p){ beep(false); toast(lastAmbiguous ? `${code} es referencia original de ${lastAmbiguous.length} artículos (${lastAmbiguous.slice(0,3).join(', ')}…). Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); return; }
   if(!isAdmin()){ beep(false); toast('Solo un administrador puede contar o recibir. Usa Buscar.', 'bad'); return; }
   const now = new Date();
@@ -1110,6 +1112,8 @@ function openDetail(ref){
       <div class="mut" id="pfMargin"></div>
       <label>Referencias / artículo original <small class="mut">(una por línea)</small><textarea id="edOe" rows="3" placeholder="Ej. Volvo 20514235">${esc((row.oeRefs||[]).join('\n'))}</textarea></label>
       ${p.refs.length ? `<div class="mut">Del catálogo (fijas): ${esc(p.refs.join(', '))}</div>` : ''}
+      <label>Agregar GTIN / código de barras nuevo <small class="mut">(escanéalo o escríbelo; uno por línea)</small><textarea id="edGtin" rows="2" autocapitalize="none" autocomplete="off" placeholder="Ej. 4066195012345"></textarea></label>
+      ${codes.length ? `<div class="mut">Ya tiene: ${esc(codes.join(', '))}</div>` : ''}
       <button class="pri big" id="edSave" data-ref="${esc(ref)}">💾 Guardar cambios</button></div>` : ''}
     ${isAdmin() ? `<button class="big" style="margin-top:12px" onclick="etPrintSku('${esc(ref)}')">🖨 Imprimir etiqueta (SKU grande)</button>` : ''}
     ${historyHtml(ref, v)}
@@ -1158,6 +1162,11 @@ function bindEditForm(row, p){
     const num = x=> x.trim() === '' ? '' : Math.max(0, Math.round(Number(x) * 100) / 100);
     const cost = num(c.value), price = num(pr.value);
     if(String(cost) !== String(row.cost ?? '') || String(price) !== String(row.price ?? '')){ queue({t:'setPrice', ref, cost, price}); n++; }
+    const gNew = [...new Set($('edGtin').value.split(/[\n\t,; ]+/).map(x=>x.trim()).filter(Boolean))];
+    const yaTiene = new Set([p.gtin, row.gtin, ...(row.altCodes||[]), ...(GTIN_ALT[ref]||[])].filter(Boolean).map(x=>String(x).toLowerCase()));
+    for(const g of gNew){ if(/[<>"]/.test(g) || g.length > 40) return toast('GTIN no válido: ' + g, 'bad'); const ow = findByCode(g); if(ow && ow.ref !== ref) return toast(`El GTIN ${g} ya pertenece al SKU ${ow.ref} (${ow.title}).`, 'bad'); }
+    const gAdd = gNew.filter(g=>!yaTiene.has(g.toLowerCase()));
+    if(gAdd.length){ queue({t:'addGtin', ref, codes:gAdd}); n++; }
     const oe = splitOeLines($('edOe').value);
     if(JSON.stringify(oe) !== JSON.stringify(row.oeRefs || [])){ queue({t:'setOe', ref, oeRefs: oe}); n++; }
     const stTxt = $('edStock').value.trim();
@@ -1313,6 +1322,9 @@ $('areaNew').onclick = ()=>{
 autoScan($('inInv'), c=>handleCode(c, 'teclado'));
 autoScan($('inRec'), c=>handleCode(c, 'teclado'));
 let busT = null; $('inBus').addEventListener('input', ()=>{ clearTimeout(busT); busT = setTimeout(doSearch, 200); });
+// Ver artículo: al escanear (la pistola manda Enter) abre el artículo y deja la caja limpia para el próximo
+$('inBus').addEventListener('keydown', e=>{ if(e.key !== 'Enter') return; e.preventDefault(); const v = $('inBus').value.trim(); if(!v) return;
+  if(findByCode(v)) handleCode(v, 'teclado'); else { clearTimeout(busT); doSearch(); try{ $('inBus').select(); }catch(_){} } });
 $('listBus').addEventListener('click', e=>{ if(e.target.id === 'busMore'){ busShown += 60; doSearch(true); return; } const r = e.target.closest('[data-open]'); if(r) openDetail(r.dataset.open); });
 $('sheet').addEventListener('click', e=>{ if(e.target.id === 'sheet') $('sheet').classList.remove('on'); });
 const setTimers = {};
@@ -1341,7 +1353,7 @@ if('serviceWorker' in navigator && (location.protocol === 'https:' || location.h
   let tag = null;
   const getTag = async ()=>{ try{ const r = await fetch(url + '?v=' + Date.now(), {method:'HEAD', cache:'no-store'}); return r.ok ? (r.headers.get('etag') || r.headers.get('last-modified')) : null; }catch(e){ return null; } };
   const busy = ()=>{ const a = document.activeElement; const typing = a && /INPUT|TEXTAREA|SELECT/.test(a.tagName) && a.value && a.type !== 'number' && !/scan|inInv|inRec|inBus/i.test(a.id||'');
-    return typing || !!document.querySelector('#locAlertOverlay.is-open, #locAlert.on, #addArticleOverlay.is-open'); };
+    return typing || !!document.querySelector('#locAlertOverlay.is-open, #locAlert.on, #addArticleOverlay.is-open, #naOv:not([hidden]), #etkPad:not([hidden]), #etkArea:not([hidden]), #sheet.on'); };
   function banner(){
     let b = document.getElementById('newVersionBar');
     if(!b){ b = document.createElement('div'); b.id = 'newVersionBar'; b.style.cssText = 'position:fixed;left:50%;top:10px;transform:translateX(-50%);z-index:100001;background:#16a34a;color:#fff;font:700 14px system-ui,sans-serif;padding:10px 16px;border-radius:999px;box-shadow:0 6px 20px rgba(0,0,0,.4);cursor:pointer';
@@ -1724,7 +1736,7 @@ body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
   };
   const k = (t, cls, data)=>`<button type="button" class="k ${cls||''}" ${data||''}>${t}</button>`;
   function pintar(){
-    const bar = `<div class="bar"><button type="button" data-a="ok">Listo</button></div>`;
+    const bar = `<div class="bar"><button type="button" data-a="listo">Listo</button></div>`;
     if(esNum(campo)){
       const dec = !(campo.step === '1' || /qty|Stock|copies/i.test(campo.id||'') || campo.className.includes('copies'));
       const t = [['1',''],['2','ABC'],['3','DEF'],['4','GHI'],['5','JKL'],['6','MNO'],['7','PQRS'],['8','TUV'],['9','WXYZ']];
@@ -1779,10 +1791,20 @@ body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
     else if(a === 'sp'){ poner(valor() + ' '); if(capa !== 'abc'){ capa = 'abc'; pintar(); } }
     else if(a === 'sh'){ mayus = !mayus; pintar(); }
     else if(a === 'num' || a === 'sim' || a === 'abc'){ capa = a; pintar(); }
-    else if(a === 'ok'){ const el = campo; cerrar(); el.dispatchEvent(new Event('change', {bubbles:true})); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true})); el.blur(); }
+    else if(a === 'listo'){ const el = campo; cerrar(); el.dispatchEvent(new Event('change', {bubbles:true})); el.blur(); }
+    else if(a === 'ok'){
+      const el = campo;
+      if(el.tagName === 'TEXTAREA'){ poner(valor() + '\n'); return; }                      // en cajas de varias líneas: salto de línea
+      cerrar(); el.dispatchEvent(new Event('change', {bubbles:true}));
+      // "intro" solo busca / registra en las cajas de escaneo y donde la app ya usa Enter; en las demás solo cierra
+      if(/^(inBus|inInv|inRec|nTramo|nEst|etkBuscar|edStock)$/.test(el.id || '')) el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
+      el.blur();
+    }
   }
   // tocar fuera del campo y del teclado → se cierra (igual que el iPhone)
-  document.addEventListener('pointerdown', e=>{ if(!pad.hidden && !pad.contains(e.target) && e.target !== campo && !editable(e.target)) cerrar(); }, true);
+  document.addEventListener('pointerdown', e=>{ if(!pad.hidden && !pad.contains(e.target) && e.target !== campo && !editable(e.target)){ const el = campo; cerrar(); if(el && document.activeElement === el) el.blur(); } }, true);
+  // volver a tocar el mismo campo (ya enfocado) con la pistola puesta → reabrir el teclado
+  document.addEventListener('touchend', e=>{ const el = e.target; if(pistola && pad.hidden && editable(el) && document.activeElement === el){ e.preventDefault(); abrir(el); } }, {passive:false});
   document.addEventListener('focusout', e=>{ if(e.target === campo) setTimeout(()=>{ if(campo && document.activeElement !== campo) cerrar(); }, 120); });
 
   // al tocar un campo editable
