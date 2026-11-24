@@ -634,7 +634,9 @@ function etToggleHtml(){
     <details class="et-more"><summary>⚙ Opciones de etiqueta</summary>
     <label class="et-copies-lbl">Etiquetas por SKU <input type="number" class="et-copies" min="1" max="50" value="${etCopies()}" inputmode="numeric" onchange="etSetCopies(this.value)" oninput="etSetCopies(this.value)"></label>` + etFieldsHtml() + `</details>`;
 }
-function etFields(){ const d = {sku:true, name:true, brand:false, barcode:false, oe:false}; try{ return Object.assign(d, JSON.parse(localStorage.getItem('et_fields') || '{}')); }catch(e){ return d; } }
+// igual que la web: SKU + código de barras del sistema + referencia/artículo original (se aplica una vez; luego se puede cambiar en ⚙)
+try{ if(!localStorage.getItem('et_fields_v2')){ localStorage.setItem('et_fields', JSON.stringify({sku:true, name:false, brand:false, barcode:true, oe:true})); localStorage.setItem('et_fields_v2', '1'); } }catch(e){}
+function etFields(){ const d = {sku:true, name:false, brand:false, barcode:true, oe:true}; try{ return Object.assign(d, JSON.parse(localStorage.getItem('et_fields') || '{}')); }catch(e){ return d; } }
 function etSetField(k, on){ const f = etFields(); f[k] = !!on; try{ localStorage.setItem('et_fields', JSON.stringify(f)); }catch(e){} document.querySelectorAll('.et-f-' + k).forEach(c=>c.checked = !!on); etRefreshPreviews(); }
 // Acomoda lo elegido en la etiqueta de 2" x 1" (406 x 203 puntos a 203 dpi)
 function etLayout(d){
