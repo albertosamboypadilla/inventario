@@ -1321,6 +1321,11 @@ $('areaNew').onclick = ()=>{
 };
 autoScan($('inInv'), c=>handleCode(c, 'teclado'));
 autoScan($('inRec'), c=>handleCode(c, 'teclado'));
+// Ver artículo: al cerrar la ficha, la caja queda lista para escanear el próximo (sin tocar nada)
+new MutationObserver(()=>{ if(!$('sheet').classList.contains('on') && currentTab === 'bus'){ const el = $('inBus'); el.value = ''; el._etkSinTeclado = true; el.setAttribute('inputmode','none'); el.focus({preventScroll:true}); setTimeout(()=>{ el._etkSinTeclado = false; }, 400); } }).observe($('sheet'), {attributes:true, attributeFilter:['class']});
+// si luego tocas la caja con el dedo, se suelta y vuelve a tomar el foco normal (para que salga el teclado)
+$('inBus').addEventListener('touchstart', ()=>{ const el = $('inBus'); if(el.getAttribute('inputmode') === 'none' && document.activeElement === el){ el.removeAttribute('inputmode'); el.blur(); } }, {passive:true});
+$('inBus').addEventListener('blur', ()=>{ if($('inBus').getAttribute('inputmode') === 'none') $('inBus').removeAttribute('inputmode'); });
 let busT = null; $('inBus').addEventListener('input', ()=>{ clearTimeout(busT); busT = setTimeout(doSearch, 200); });
 // Ver artículo: al escanear (la pistola manda Enter) abre el artículo y deja la caja limpia para el próximo
 $('inBus').addEventListener('keydown', e=>{ if(e.key !== 'Enter') return; e.preventDefault(); const v = $('inBus').value.trim(); if(!v) return;
@@ -1812,6 +1817,7 @@ body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
   document.addEventListener('focusin', e=>{
     const el = e.target; if(!editable(el) || el.id === 'etkBuscar' && false) return;
     if(campo === el) return;
+    if(el._etkSinTeclado){ el._etkSinTeclado = false; if(campo) cerrar(); return; }   // foco puesto por la app para escanear: sin teclado
     if(campo) cerrar();
     clearTimeout(chequeo);
     if(pistola){ abrir(el); return; }                   // ya sabemos que está la pistola
