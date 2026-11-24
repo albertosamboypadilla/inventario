@@ -1613,12 +1613,14 @@ body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
     }
     document.body.style.setProperty('--etk-h', (pad.offsetHeight || 300) + 'px');
   }
-  const valor = ()=> esNum(campo) ? buf : campo.value;
-  function poner(v){
+  const valor = ()=>{ if(!esNum(campo)) return campo.value; if(buf.replace(/\.$/,'') !== String(campo.value)) buf = String(campo.value); return buf; };
+  function poner(v, sinAviso){
     if(esNum(campo)){ v = v.replace(/[^0-9.]/g,''); const p = v.split('.'); if(p.length > 2) v = p[0] + '.' + p.slice(1).join(''); buf = v; campo.value = v.replace(/\.$/,''); }
     else campo.value = v;
-    campo.dispatchEvent(new Event('input', {bubbles:true}));
+    try{ const n = campo.value.length; if(campo.setSelectionRange && !esNum(campo)) campo.setSelectionRange(n, n); }catch(_){}
+    if(!sinAviso) campo.dispatchEvent(new Event('input', {bubbles:true}));
   }
+  const borrar = ()=>{ if(!campo) return; const v = valor(); if(!v) return; poner(v.slice(0,-1), /^(inInv|inRec)$/.test(campo.id||'')); if(navigator.vibrate) navigator.vibrate(5); };
   function abrir(el){
     campo = el; buf = esNum(el) ? String(el.value || '') : ''; capa = 'abc';
     mayus = !el.value && el.getAttribute('autocapitalize') !== 'none'; bloqMayus = el.getAttribute('autocapitalize') === 'characters';
@@ -1626,19 +1628,27 @@ body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
     el.setAttribute('inputmode','none'); pad.hidden = false; document.body.classList.add('etk-pad-on'); pintar();
     setTimeout(()=>el.scrollIntoView({block:'center', behavior:'smooth'}), 60);
   }
-  function cerrar(){ if(campo) campo.removeAttribute('inputmode'); pad.hidden = true; document.body.classList.remove('etk-pad-on'); campo = null; }
+  function cerrar(){ pararRep(); if(campo) campo.removeAttribute('inputmode'); pad.hidden = true; document.body.classList.remove('etk-pad-on'); campo = null; }
   pad.addEventListener('pointerdown', e=>e.preventDefault());
-  pad.addEventListener('touchstart', e=>{ if(e.target.closest('button')) e.preventDefault(); const b = e.target.closest('button'); if(b) b.click(); }, {passive:false});
-  pad.addEventListener('click', e=>{
-    const b = e.target.closest('button'); if(!b || !campo || b.disabled) return;
+  let ultToque = 0, rep = null, repT = null;
+  const pararRep = ()=>{ clearTimeout(repT); clearInterval(rep); repT = rep = null; };
+  pad.addEventListener('touchstart', e=>{
+    const b = e.target.closest('button'); if(!b) return; e.preventDefault(); ultToque = Date.now();
+    if(b.dataset.a === 'bs'){ pararRep(); borrar(); repT = setTimeout(()=>{ rep = setInterval(borrar, 90); }, 450); return; }
+    accion(b);
+  }, {passive:false});
+  ['touchend','touchcancel'].forEach(t=>pad.addEventListener(t, pararRep));
+  pad.addEventListener('click', e=>{ if(Date.now() - ultToque < 600) return; const b = e.target.closest('button'); if(b) accion(b); });
+  function accion(b){
+    if(!b || !campo || b.disabled) return;
     const a = b.dataset.a, c = b.dataset.c;
     if(c !== undefined){ const ch = (capa === 'abc' && mayus) ? c.toUpperCase() : c; poner(valor() + ch); if(capa === 'abc' && mayus && !bloqMayus){ mayus = false; pintar(); } return; }
-    if(a === 'bs') poner(valor().slice(0,-1));
+    if(a === 'bs') borrar();
     else if(a === 'sp'){ poner(valor() + ' '); if(capa !== 'abc'){ capa = 'abc'; pintar(); } }
     else if(a === 'sh'){ mayus = !mayus; pintar(); }
     else if(a === 'num' || a === 'sim' || a === 'abc'){ capa = a; pintar(); }
     else if(a === 'ok'){ const el = campo; cerrar(); el.dispatchEvent(new Event('change', {bubbles:true})); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true})); el.blur(); }
-  });
+  }
   // tocar fuera del campo y del teclado → se cierra (igual que el iPhone)
   document.addEventListener('pointerdown', e=>{ if(!pad.hidden && !pad.contains(e.target) && e.target !== campo && !editable(e.target)) cerrar(); }, true);
   document.addEventListener('focusout', e=>{ if(e.target === campo) setTimeout(()=>{ if(campo && document.activeElement !== campo) cerrar(); }, 120); });
