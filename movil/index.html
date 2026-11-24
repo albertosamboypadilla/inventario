@@ -1530,6 +1530,108 @@ html,body{overflow-x:hidden}
   });
 })();
 </script>
+<!-- ===== Agregar artículo nuevo desde el celular (igual que la web) 2026-11-24 ===== -->
+<style>
+#naBtn{width:100%;margin-top:10px;padding:14px;border-radius:14px;border:1px dashed rgba(255,195,0,.6);background:rgba(255,195,0,.08);color:#ffd76a;font-weight:800;font-size:16px}
+#naOv{position:fixed;inset:0;z-index:9000;background:#0b0d12;overflow-y:auto;padding:calc(12px + env(safe-area-inset-top)) 14px calc(30px + env(safe-area-inset-bottom))}
+#naOv[hidden]{display:none}
+#naOv h3{margin:4px 0 2px;font-size:20px}
+#naOv .sec{margin:14px 0 6px;color:#ffd76a;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+#naOv label{display:block;margin:0 0 10px;color:#9aa3b5;font-size:13px}
+#naOv label input,#naOv label textarea{margin-top:4px;width:100%;box-sizing:border-box}
+#naOv textarea{background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:12px;color:#fff;font-size:16px}
+#naOv .dos{display:flex;gap:10px}#naOv .dos label{flex:1}
+#naOv .foto{display:flex;gap:10px;align-items:center}
+#naOv .foto img{width:96px;height:96px;object-fit:contain;background:#fff;border-radius:12px}
+#naOv .foto button,#naOv .acc button{padding:14px;border-radius:14px;border:0;font-weight:800;font-size:16px}
+#naOv .foto button{flex:1;background:#262b36;color:#fff}
+#naOv .acc{display:flex;gap:10px;margin-top:16px}
+#naOv .acc .ok{flex:2;background:linear-gradient(135deg,#ffb020,#ff7a1a);color:#1a0e00}
+#naOv .acc .no{flex:1;background:#262b36;color:#fff}
+#naOv .err{color:#ff6b6b;font-size:13px;margin:-6px 0 10px;display:none}
+#naOv .top{display:flex;justify-content:space-between;align-items:center}
+#naOv .top button{background:#262b36;border:0;color:#fff;border-radius:12px;width:44px;height:44px;font-size:20px}
+</style>
+<div id="naOv" hidden>
+  <div class="top"><h3>➕ Artículo nuevo</h3><button type="button" id="naX">✕</button></div>
+  <div class="mut">Los mismos datos que en la página web. La referencia / SKU no se puede repetir.</div>
+  <div class="sec">Datos del artículo</div>
+  <label>Referencia / SKU *<input id="naRef" type="text" autocomplete="off" autocapitalize="characters" placeholder="Ej. 1.00999"></label><div class="err" id="naRefErr"></div>
+  <label>Nombre del artículo *<input id="naTitle" type="text" autocomplete="off" placeholder="Ej. Filtro de aceite"></label><div class="err" id="naTitleErr"></div>
+  <div class="dos"><label>Marca<input id="naBrand" type="text" value="DT Spare Parts"></label><label>Categoría<input id="naCat" type="text" value="Repuesto"></label></div>
+  <label>GTIN / códigos de barras <small>(uno por línea — puedes escanearlos)</small><textarea id="naGtin" rows="2" autocapitalize="none" placeholder="Ej. 4066195012345"></textarea></label><div class="err" id="naGtinErr"></div>
+  <label>Referencia o artículo original <small>(uno por línea, ej. Volvo 20514235)</small><textarea id="naOe" rows="2" placeholder="Ej. Scania 1411851"></textarea></label>
+  <label>Aplicaciones / vehículos<input id="naApps" type="text" placeholder="Ej. Scania R-series, Volvo FH"></label>
+  <div class="sec">Foto (opcional)</div>
+  <div class="foto"><img id="naImg" src="../img/mascota-rinoceronte.svg" alt=""><button type="button" id="naFotoBtn">📸 Tomar o elegir foto</button></div>
+  <input id="naFile" type="file" accept="image/*" capture="environment" hidden>
+  <div class="sec">Inventario inicial</div>
+  <div class="dos"><label>Stock inicial<input id="naStock" type="number" inputmode="numeric" min="0" step="1" value="0"></label><label>Tramo<input id="naTramo" type="text" autocapitalize="characters"></label><label>Estante<input id="naEst" type="text" autocapitalize="characters"></label></div>
+  <div class="dos"><label>Costo (US$)<input id="naCost" type="number" inputmode="decimal" min="0" step="0.01"></label><label>Precio final (US$)<input id="naPrice" type="number" inputmode="decimal" min="0" step="0.01"></label></div>
+  <div class="acc"><button type="button" class="no" id="naNo">Cancelar</button><button type="button" class="ok" id="naOk">💾 Guardar artículo</button></div>
+</div>
+<script>
+(function(){
+  const g = id=>document.getElementById(id);
+  let foto = '';
+  // operación: crea la ficha del artículo en su registro (igual que la web: inv.product), para que salga en todas las PC
+  OPS.newArt = { inv(r, o){
+    if(r && r.product) return r;               // ya existía (otra PC lo creó): no se pisa
+    r = r || {stock:0, location:'', cost:'', price:'', gtin:'', sold:0, altCodes:[]};
+    r.product = {title:o.title, brand:o.brand, cat:o.cat, applications:o.apps, gtin:o.gtin, refs:o.oe.slice(), img:o.img, creado:o.at, por:o.by, origen:'celular'};
+    r.stock = o.stock; r.gtin = o.gtin; r.altCodes = o.alt.slice(); r.oeRefs = o.oe.slice();
+    if(o.cost !== '') r.cost = o.cost; if(o.price !== '') r.price = o.price;
+    if(o.loc) r.location = o.loc;
+    return r; } };
+
+  // botón en "Ver artículo y ubicación"
+  const bus = g('inBus'); const card = bus && bus.closest('.card');
+  if(card){ const b = document.createElement('button'); b.type = 'button'; b.id = 'naBtn'; b.textContent = '➕ Agregar artículo nuevo'; card.appendChild(b); b.onclick = abrir; }
+  const lineas = id=> [...new Set(g(id).value.split(/[\n\t,;]+/).map(s=>s.trim()).filter(Boolean))];
+  const err = (id, m)=>{ const e = g(id); e.textContent = m || ''; e.style.display = m ? 'block' : 'none'; };
+  function abrir(){
+    if(isGuest() || !cfg.token){ toast('Inicia sesión para agregar artículos.', 'bad'); return; }
+    ['naRef','naTitle','naGtin','naOe','naApps','naCost','naPrice'].forEach(id=>g(id).value = '');
+    g('naBrand').value = 'DT Spare Parts'; g('naCat').value = 'Repuesto'; g('naStock').value = '0';
+    try{ const a = areaSel(); g('naTramo').value = a ? a.tramo : ''; g('naEst').value = a ? a.estante : ''; }catch(e){ g('naTramo').value = ''; g('naEst').value = ''; }
+    foto = ''; g('naImg').src = '../img/mascota-rinoceronte.svg'; ['naRefErr','naTitleErr','naGtinErr'].forEach(id=>err(id));
+    g('naOv').hidden = false; g('naOv').scrollTop = 0;
+  }
+  const cerrar = ()=>{ g('naOv').hidden = true; };
+  g('naX').onclick = cerrar; g('naNo').onclick = cerrar;
+  // foto: se achica a 800 px para que no pese
+  g('naFotoBtn').onclick = ()=> g('naFile').click();
+  g('naFile').onchange = e=>{
+    const f = e.target.files && e.target.files[0]; if(!f) return;
+    const rd = new FileReader(); rd.onload = ()=>{ const im = new Image(); im.onload = ()=>{
+      const m = 800, s = Math.min(1, m / Math.max(im.width, im.height)); const c = document.createElement('canvas');
+      c.width = Math.round(im.width * s); c.height = Math.round(im.height * s); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+      foto = c.toDataURL('image/jpeg', 0.78); g('naImg').src = foto; }; im.src = rd.result; }; rd.readAsDataURL(f); e.target.value = '';
+  };
+  g('naOk').onclick = async ()=>{
+    ['naRefErr','naTitleErr','naGtinErr'].forEach(id=>err(id));
+    const ref = g('naRef').value.trim(), title = g('naTitle').value.trim();
+    if(!ref){ err('naRefErr', 'Falta la Referencia / SKU.'); g('naRef').focus(); return; }
+    if(BY_REF[ref]){ err('naRefErr', `Ya existe ${ref}: ${BY_REF[ref].title}. Búscalo en el catálogo.`); g('naRef').focus(); return; }
+    if(!title){ err('naTitleErr', 'Falta el Nombre del artículo.'); g('naTitle').focus(); return; }
+    const gt = lineas('naGtin');
+    const malo = gt.find(c=>/[<>"]/.test(c) || c.length > 40); if(malo){ err('naGtinErr', 'GTIN no válido: ' + malo + '. Si es un número del fabricante, ponlo en "Referencia o artículo original".'); return; }
+    for(const c of gt){ const ow = findByCode(c); if(ow && ow.ref !== ref){ err('naGtinErr', `El GTIN ${c} ya pertenece al SKU ${ow.ref} (${ow.title}).`); return; } }
+    const tramo = g('naTramo').value.trim(), est = g('naEst').value.trim();
+    if((tramo && !est) || (!tramo && est)){ toast('Escribe tramo y estante (los dos).', 'bad'); return; }
+    const o = {t:'newArt', ref, title, brand:g('naBrand').value.trim() || 'DT Spare Parts', cat:g('naCat').value.trim() || 'Repuesto', apps:g('naApps').value.trim(),
+      gtin:gt[0] || '', alt:gt.slice(1), oe:lineas('naOe'), img:foto, stock:Math.max(0, parseInt(g('naStock').value, 10) || 0),
+      cost:g('naCost').value === '' ? '' : Number(g('naCost').value), price:g('naPrice').value === '' ? '' : Number(g('naPrice').value),
+      loc:(tramo && est) ? tramo + '/' + est : '', at:new Date().toISOString(), by:cfg.usuario || ''};
+    // que aparezca ya en el celular, aunque no haya señal
+    BY_REF[ref] = {ref, title, brand:o.brand, cat:o.cat, gtin:o.gtin, refs:o.oe.slice(), oe:'', img:foto, custom:true}; PRODUCTS.push(BY_REF[ref]);
+    queue(o); cerrar(); beep(true); toast('Artículo agregado: ' + title, 'good');
+    // código de barras del sistema: lo da el servidor (el mismo contador que la web, nunca se repite)
+    try{ const r = await fetch(cfg.url + '/api/' + APP + '/codigos', {method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer ' + cfg.token}, body:JSON.stringify({refs:[ref]})}); await r.json().catch(()=>null); }catch(e){}
+    setTimeout(()=>{ try{ openDetail(ref); }catch(e){} }, 300);
+  };
+})();
+</script>
 <!-- ===== Pistola USB: teclado tipo iPhone automático + selector de área a lo largo (2026-11-24) ===== -->
 <style>
 #etkPad{position:fixed;left:0;right:0;bottom:0;z-index:100000;background:#2b2b2d;padding:0 3px calc(4px + env(safe-area-inset-bottom));font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}
