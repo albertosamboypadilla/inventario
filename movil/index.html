@@ -1528,28 +1528,32 @@ html,body{overflow-x:hidden}
   });
 })();
 </script>
-<!-- ===== Pistola USB: teclado propio + borrar + selector de área a lo largo (2026-11-24) ===== -->
+<!-- ===== Pistola USB: teclado tipo iPhone automático + selector de área a lo largo (2026-11-24) ===== -->
 <style>
-.etk-x,.etk-k{flex:0 0 auto;min-width:48px;border-radius:14px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.07);color:#fff;font-size:20px}
-.etk-k.on{background:linear-gradient(135deg,#ffb020,#ff7a1a);color:#1a0e00}
-#etkModo{width:100%;margin:8px 0 0;padding:12px;border-radius:14px;border:1px solid rgba(255,195,0,.45);background:rgba(255,195,0,.08);color:#ffd76a;font-weight:800;font-size:15px}
-#etkModo.on{background:linear-gradient(135deg,#ffb020,#ff7a1a);color:#1a0e00}
-#etkPad{position:fixed;left:0;right:0;bottom:0;z-index:100000;background:#0d0f14;border-top:2px solid #ffb020;padding:8px 6px calc(8px + env(safe-area-inset-bottom));box-shadow:0 -10px 30px rgba(0,0,0,.6)}
+#etkPad{position:fixed;left:0;right:0;bottom:0;z-index:100000;background:#2b2b2d;padding:0 3px calc(4px + env(safe-area-inset-bottom));font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}
 #etkPad[hidden]{display:none}
-#etkPad.num .fila.le{display:none}
-#etkPad .fila.nu{display:none}
-#etkPad.num .fila.nu{display:flex}
-#etkPad.num .fila.nu button{height:58px;font-size:26px}
-#etkPad.num .fila.dg{display:none}
-#etkPad.num .le-only{display:none}
-#etkPad .ev{display:flex;align-items:center;gap:8px;margin:0 2px 8px}
-#etkPad .ev b{flex:1;min-height:44px;display:flex;align-items:center;padding:0 12px;border-radius:10px;background:#000;color:#fff;font-size:20px;letter-spacing:1px;word-break:break-all}
-#etkPad .ev small{color:#ffd76a;font-size:12px}
-#etkPad .fila{display:flex;gap:4px;margin-bottom:5px}
-#etkPad .fila button{flex:1;height:46px;border:0;border-radius:8px;background:#262b36;color:#fff;font-size:19px;font-weight:600;padding:0}
-#etkPad .fila button.ac{background:#3a4152}
-#etkPad .fila button.ok{background:linear-gradient(135deg,#ffb020,#ff7a1a);color:#1a0e00;font-weight:800}
-#etkPad .fila button.rojo{background:#7a1f1f}
+#etkPad .bar{display:flex;justify-content:flex-end;align-items:center;height:42px;padding:0 12px;background:#1f1f21;margin:0 -3px 8px;border-top:.5px solid #3a3a3c}
+#etkPad .bar button{background:none;border:0;color:#0a84ff;font-size:17px;font-weight:600;padding:8px 4px}
+#etkPad .fila{display:flex;justify-content:center;gap:6px;margin:0 0 11px}
+#etkPad .k{flex:0 0 calc((100% - 54px)/10);height:44px;border:0;border-radius:5px;background:#6b6b6e;color:#fff;font-size:23px;font-weight:400;padding:0;box-shadow:0 1px 0 #000;display:flex;align-items:center;justify-content:center}
+#etkPad .k:active{background:#8e8e93}
+#etkPad .k.f{background:#464649;font-size:17px}
+#etkPad .k.f:active{background:#6b6b6e}
+#etkPad .k.sh,#etkPad .k.bs{flex:0 0 calc((100% - 54px)/10*1.35)}
+#etkPad .k.sh.on{background:#fff;color:#000}
+#etkPad .k.n123{flex:0 0 calc((100% - 54px)/10*1.25)}
+#etkPad .k.sp{flex:1 1 auto;font-size:16px}
+#etkPad .k.ret{flex:0 0 calc((100% - 54px)/10*2.3);background:#0a84ff;font-size:17px}
+#etkPad .k.ret:active{background:#409cff}
+#etkPad .fila.mid{padding:0 calc((100% - 54px)/20)}
+/* teclado numérico tipo iPhone (decimal pad) */
+#etkPad .np{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:0 3px 4px}
+#etkPad .np button{height:48px;border:0;border-radius:6px;background:#6b6b6e;color:#fff;font-size:26px;box-shadow:0 1px 0 #000;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+#etkPad .np button small{font-size:10px;letter-spacing:2px;font-weight:600;margin-top:2px}
+#etkPad .np button:active{background:#8e8e93}
+#etkPad .np button.vac{background:transparent;box-shadow:none}
+#etkPad .np button.bs{background:transparent;box-shadow:none;font-size:24px}
+body.etk-pad-on{padding-bottom:var(--etk-h,300px)}
 #areaSel.etk-oculto{display:none}
 #etkAreaBtn{width:100%;text-align:left;padding:14px 44px 14px 14px;border-radius:14px;border:1px solid rgba(255,195,0,.45);background:rgba(0,0,0,.35);color:#fff;font-size:17px;font-weight:700;line-height:1.35;white-space:normal;position:relative}
 #etkAreaBtn:after{content:'▾';position:absolute;right:14px;top:50%;transform:translateY(-50%);color:#ffb020;font-size:20px}
@@ -1568,71 +1572,99 @@ html,body{overflow-x:hidden}
 <script>
 (function(){
   const $$ = id=>document.getElementById(id);
-  const KEY = 'etk-modo-pistola';
-  let modo = false; try{ modo = localStorage.getItem(KEY) === '1'; }catch(e){}
-  const OBJ = ['inBus','inInv','inRec','nTramo','nEst','lfTramo','lfEst','etkBuscar'];
-  const esObj = el=> el && el.tagName === 'INPUT' && (OBJ.includes(el.id) || el.type === 'text' || el.type === 'search' || el.type === 'number') && !el.readOnly && !el.disabled;
+  const TIPOS = ['text','search','number','tel','email','url','password',''];
+  const editable = el=> el && ((el.tagName === 'INPUT' && TIPOS.includes((el.getAttribute('type')||'').toLowerCase())) || el.tagName === 'TEXTAREA') && !el.readOnly && !el.disabled;
+  const esNum = el=> el && (el.type === 'number' || el.type === 'tel');
 
-  /* ---------- teclado propio (sale aunque la pistola esté conectada) ---------- */
-  const pad = document.createElement('div'); pad.id = 'etkPad'; pad.hidden = true;
-  const F = ['1234567890','QWERTYUIOP','ASDFGHJKLÑ','ZXCVBNM-/.'];
-  pad.innerHTML = `<div class="ev"><b id="etkVer"></b><small id="etkQue"></small></div>`
-    + F.map((f,i)=>`<div class="fila ${i ? 'le' : 'dg'}">${[...f].map(c=>`<button data-c="${c}">${c}</button>`).join('')}</div>`).join('')
-    + ['789','456','123','.0⌫'].map(f=>`<div class="fila nu">${[...f].map(c=>c==='⌫' ? `<button class="ac" data-a="atras">⌫</button>` : `<button data-c="${c}">${c}</button>`).join('')}</div>`).join('')
-    + `<div class="fila"><button class="rojo" data-a="limpiar">Borrar todo</button><button class="ac le-only" data-a="esp">espacio</button><button class="ac le-only" data-a="atras">⌫</button><button class="ac" data-a="cerrar">Cerrar</button><button class="ok" data-a="ok">OK ↵</button></div>`;
-  document.body.appendChild(pad);
-  let campo = null, buf = '';
-  const esNum = ()=> campo && campo.type === 'number';
-  const ver = ()=>{ if(!campo) return; $$('etkVer').textContent = (esNum() ? buf : campo.value) || ' '; const l = campo.closest('label'); $$('etkQue').textContent = l ? l.childNodes[0].textContent.trim() : ''; };
-  const poner = v=>{ if(esNum()){ v = v.replace(/[^0-9.]/g,''); if(campo.step === '1' || /qty|Stock/i.test(campo.id)) v = v.replace(/\./g,''); const pp = v.split('.'); if(pp.length > 2) v = pp[0] + '.' + pp.slice(1).join(''); buf = v; campo.value = v.replace(/\.$/,''); } else campo.value = v; campo.dispatchEvent(new Event('input', {bubbles:true})); ver(); };
-  function abrir(el){ campo = el; buf = el.type === 'number' ? '' : ''; pad.classList.toggle('num', el.type === 'number'); el.setAttribute('inputmode','none'); pad.hidden = false; ver(); setTimeout(()=>el.scrollIntoView({block:'center', behavior:'smooth'}), 60); }
-  function cerrar(){ pad.hidden = true; campo = null; }
-  window.etkAbrir = abrir;
-  pad.addEventListener('pointerdown', e=>e.preventDefault());   // no robar el foco del campo
-  pad.addEventListener('click', e=>{
-    const b = e.target.closest('button'); if(!b || !campo) return;
-    const cur = esNum() ? buf : campo.value;
-    if(navigator.vibrate) navigator.vibrate(8);
-    if(b.dataset.c) return poner(cur + b.dataset.c);
-    const a = b.dataset.a;
-    if(a === 'atras') poner(cur.slice(0,-1));
-    else if(a === 'limpiar') poner('');
-    else if(a === 'esp') poner(campo.value + ' ');
-    else if(a === 'cerrar') cerrar();
-    else if(a === 'ok'){ const c = campo; cerrar(); c.dispatchEvent(new Event('change', {bubbles:true})); c.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true})); if(c.form) c.form.requestSubmit && c.form.requestSubmit(); }
-  });
-  // las teclas de la pistola también se ven en el teclado abierto
-  document.addEventListener('input', e=>{ if(e.target === campo) ver(); }, true);
+  /* ---- ¿está conectada la pistola? ----
+     Con la pistola (teclado físico) el iPhone NO saca su teclado al tocar un campo.
+     Al tocar un campo esperamos un momento: si el teclado del iPhone salió, todo normal;
+     si no salió, la pistola está conectada y ponemos nuestro teclado igualito al del iPhone. */
+  let pistola = false;
+  const altoBase = ()=> window.innerHeight;
+  const tecladoNativoAbierto = ()=> window.visualViewport ? (window.visualViewport.height < altoBase() * 0.78) : false;
 
-  // tocar un campo con el dedo en modo pistola → teclado propio
-  document.addEventListener('touchend', e=>{
-    const el = e.target; if(!modo || !esObj(el)) return;
-    e.preventDefault(); el.focus({preventScroll:true}); abrir(el);
-  }, {passive:false});
-  // con el teclado del celular normal: tocar el campo selecciona todo para borrarlo fácil
-  document.addEventListener('focusin', e=>{ const el = e.target; if(!modo && esObj(el) && el.value && /inBus|inInv|inRec/.test(el.id)) setTimeout(()=>{ try{ el.select(); }catch(_){} }, 30); });
-  document.addEventListener('pointerdown', e=>{ if(!pad.hidden && !pad.contains(e.target) && e.target !== campo && !e.target.closest('.etk-k')) cerrar(); }, true);
-
-  function aplicarModo(){
-    document.querySelectorAll('#inBus,#inInv,#inRec').forEach(el=>{ if(modo) el.setAttribute('inputmode','none'); else el.setAttribute('inputmode','text'); });
-    const b = $$('etkModo'); if(b){ b.classList.toggle('on', modo); b.textContent = modo ? '🔫 Modo pistola USB: ACTIVO — toca un campo para el teclado de la app' : '🔫 ¿Usas la pistola USB? Toca aquí para activar el teclado de la app'; }
+  /* ---------- teclado tipo iPhone ---------- */
+  const pad = document.createElement('div'); pad.id = 'etkPad'; pad.hidden = true; document.body.appendChild(pad);
+  let campo = null, buf = '', capa = 'abc', mayus = true, bloqMayus = false;
+  const L = {
+    abc:[['q','w','e','r','t','y','u','i','o','p'],['a','s','d','f','g','h','j','k','l','ñ'],['z','x','c','v','b','n','m']],
+    num:[['1','2','3','4','5','6','7','8','9','0'],['-','/',':',';','(',')','$','&','@','"'],['.',',','?','!',"'"]],
+    sim:[['[',']','{','}','#','%','^','*','+','='],['_','\\','|','~','<','>','€','£','¥','•'],['.',',','?','!',"'"]]
+  };
+  const k = (t, cls, data)=>`<button type="button" class="k ${cls||''}" ${data||''}>${t}</button>`;
+  function pintar(){
+    const bar = `<div class="bar"><button type="button" data-a="ok">Listo</button></div>`;
+    if(esNum(campo)){
+      const dec = !(campo.step === '1' || /qty|Stock|copies/i.test(campo.id||'') || campo.className.includes('copies'));
+      const t = [['1',''],['2','ABC'],['3','DEF'],['4','GHI'],['5','JKL'],['6','MNO'],['7','PQRS'],['8','TUV'],['9','WXYZ']];
+      pad.innerHTML = bar + `<div class="np">${t.map(([n,s])=>`<button type="button" data-c="${n}">${n}<small>${s}</small></button>`).join('')}`
+        + (dec ? `<button type="button" data-c=".">.</button>` : `<button type="button" class="vac" disabled></button>`)
+        + `<button type="button" data-c="0">0</button><button type="button" class="bs" data-a="bs">⌫</button></div>`;
+    } else {
+      const f = L[capa]; const up = capa === 'abc' && mayus;
+      const r1 = f[0].map(c=>k(up ? c.toUpperCase() : c, '', `data-c="${c}"`)).join('');
+      const r2 = f[1].map(c=>k(up ? c.toUpperCase() : c, '', `data-c="${c.replace(/"/g,'&quot;')}"`)).join('');
+      const izq = capa === 'abc' ? k('⇧', 'f sh' + (mayus ? ' on' : ''), 'data-a="sh"') : k(capa === 'num' ? '#+=' : '123', 'f sh', `data-a="${capa === 'num' ? 'sim' : 'num'}"`);
+      const r3 = izq + f[2].map(c=>k(up ? c.toUpperCase() : c, capa === 'abc' ? '' : 'w', `data-c="${c}"`)).join('') + k('⌫', 'f bs', 'data-a="bs"');
+      const r4 = k(capa === 'abc' ? '123' : 'ABC', 'f n123', `data-a="${capa === 'abc' ? 'num' : 'abc'}"`) + k('espacio', 'sp', 'data-a="sp"') + k('intro', 'ret', 'data-a="ok"');
+      pad.innerHTML = bar + `<div class="fila">${r1}</div><div class="fila${capa === 'abc' ? ' mid' : ''}">${r2}</div><div class="fila">${r3}</div><div class="fila">${r4}</div>`;
+      if(capa !== 'abc') pad.querySelectorAll('.k.w').forEach(b=>b.style.flex = '0 0 calc((100% - 54px)/10*1.4)');
+    }
+    document.body.style.setProperty('--etk-h', (pad.offsetHeight || 300) + 'px');
   }
-
-  // botones ✕ (borrar) y ⌨ (teclado) en cada caja de escaneo
-  ['inBus','inInv','inRec'].forEach(id=>{
-    const el = $$(id); if(!el) return; const box = el.parentNode;
-    const x = document.createElement('button'); x.type = 'button'; x.className = 'etk-x'; x.textContent = '✕'; x.title = 'Borrar';
-    x.addEventListener('pointerdown', e=>e.preventDefault());
-    x.onclick = ()=>{ el.value = ''; el.dispatchEvent(new Event('input', {bubbles:true})); if(campo === el) ver(); if(modo) abrir(el); else el.focus(); };
-    const k = document.createElement('button'); k.type = 'button'; k.className = 'etk-k'; k.textContent = '⌨'; k.title = 'Teclado';
-    k.addEventListener('pointerdown', e=>e.preventDefault());
-    k.onclick = ()=>{ if(campo === el && !pad.hidden) return cerrar(); el.focus({preventScroll:true}); abrir(el); };
-    el.after(x, k);
+  const valor = ()=> esNum(campo) ? buf : campo.value;
+  function poner(v){
+    if(esNum(campo)){ v = v.replace(/[^0-9.]/g,''); const p = v.split('.'); if(p.length > 2) v = p[0] + '.' + p.slice(1).join(''); buf = v; campo.value = v.replace(/\.$/,''); }
+    else campo.value = v;
+    campo.dispatchEvent(new Event('input', {bubbles:true}));
+  }
+  function abrir(el){
+    campo = el; buf = esNum(el) ? String(el.value || '') : ''; capa = 'abc';
+    mayus = !el.value && el.getAttribute('autocapitalize') !== 'none'; bloqMayus = el.getAttribute('autocapitalize') === 'characters';
+    if(bloqMayus) mayus = true;
+    el.setAttribute('inputmode','none'); pad.hidden = false; document.body.classList.add('etk-pad-on'); pintar();
+    setTimeout(()=>el.scrollIntoView({block:'center', behavior:'smooth'}), 60);
+  }
+  function cerrar(){ if(campo) campo.removeAttribute('inputmode'); pad.hidden = true; document.body.classList.remove('etk-pad-on'); campo = null; }
+  pad.addEventListener('pointerdown', e=>e.preventDefault());
+  pad.addEventListener('touchstart', e=>{ if(e.target.closest('button')) e.preventDefault(); const b = e.target.closest('button'); if(b) b.click(); }, {passive:false});
+  pad.addEventListener('click', e=>{
+    const b = e.target.closest('button'); if(!b || !campo || b.disabled) return;
+    const a = b.dataset.a, c = b.dataset.c;
+    if(c !== undefined){ const ch = (capa === 'abc' && mayus) ? c.toUpperCase() : c; poner(valor() + ch); if(capa === 'abc' && mayus && !bloqMayus){ mayus = false; pintar(); } return; }
+    if(a === 'bs') poner(valor().slice(0,-1));
+    else if(a === 'sp'){ poner(valor() + ' '); if(capa !== 'abc'){ capa = 'abc'; pintar(); } }
+    else if(a === 'sh'){ mayus = !mayus; pintar(); }
+    else if(a === 'num' || a === 'sim' || a === 'abc'){ capa = a; pintar(); }
+    else if(a === 'ok'){ const el = campo; cerrar(); el.dispatchEvent(new Event('change', {bubbles:true})); el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true})); el.blur(); }
   });
-  const modoBtn = document.createElement('button'); modoBtn.type = 'button'; modoBtn.id = 'etkModo';
-  modoBtn.onclick = ()=>{ modo = !modo; try{ localStorage.setItem(KEY, modo ? '1' : '0'); }catch(e){} aplicarModo(); if(!modo) cerrar(); };
-  const hdr = document.querySelector('main'); if(hdr) hdr.prepend(modoBtn);
-  aplicarModo();
+  // tocar fuera del campo y del teclado → se cierra (igual que el iPhone)
+  document.addEventListener('pointerdown', e=>{ if(!pad.hidden && !pad.contains(e.target) && e.target !== campo && !editable(e.target)) cerrar(); }, true);
+  document.addEventListener('focusout', e=>{ if(e.target === campo) setTimeout(()=>{ if(campo && document.activeElement !== campo) cerrar(); }, 120); });
+
+  // al tocar un campo editable
+  let chequeo = null;
+  document.addEventListener('focusin', e=>{
+    const el = e.target; if(!editable(el) || el.id === 'etkBuscar' && false) return;
+    if(campo === el) return;
+    if(campo) cerrar();
+    clearTimeout(chequeo);
+    if(pistola){ abrir(el); return; }                   // ya sabemos que está la pistola
+    el.removeAttribute('inputmode');                    // dejar que el iPhone intente sacar su teclado
+    chequeo = setTimeout(()=>{
+      if(document.activeElement !== el) return;
+      if(tecladoNativoAbierto()){ pistola = false; return; }   // salió el teclado del iPhone: normal
+      pistola = true; abrir(el);                                 // no salió: la pistola está conectada
+    }, 550);
+  });
+  // si la pistola está "conectada" pero el iPhone saca su teclado → la quitaron: volver a normal
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', ()=>{ if(tecladoNativoAbierto() && pistola){ pistola = false; if(campo){ const el = campo; cerrar(); el.blur(); setTimeout(()=>el.focus(), 50); } } });
+  // lecturas rápidas de la pistola = está conectada
+  let ult = 0, rap = 0;
+  document.addEventListener('keydown', e=>{ if(!e.isTrusted || !e.key || e.key.length !== 1) return; const t = Date.now(); rap = (t - ult < 50) ? rap + 1 : 0; ult = t; if(rap >= 3 && !tecladoNativoAbierto()) pistola = true; }, true);
+  // al tocar un campo cuando ya está la pistola, el iPhone no debe intentar su teclado
+  document.addEventListener('touchstart', e=>{ if(pistola && editable(e.target)) e.target.setAttribute('inputmode','none'); }, {passive:true, capture:true});
 
   /* ---------- selector de área a lo largo, con buscador ---------- */
   const sel = $$('areaSel');
@@ -1653,7 +1685,7 @@ html,body{overflow-x:hidden}
         li.onclick = ()=>{ sel.value = o.value; sel.dispatchEvent(new Event('change')); pan.hidden = true; cerrar(); pintarBtn(); };
         ul.appendChild(li); });
     }
-    btn.onclick = ()=>{ $$('etkBuscar').value = ''; lista(); pan.hidden = false; if(modo) abrir($$('etkBuscar')); };
+    btn.onclick = ()=>{ $$('etkBuscar').value = ''; lista(); pan.hidden = false; };
     $$('etkBuscar').addEventListener('input', lista);
     $$('etkBuscar').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); const li = $$('etkAreaLista').querySelector('li'); if(li) li.click(); } });
     $$('etkAreaX').onclick = ()=>{ pan.hidden = true; cerrar(); };
@@ -1663,5 +1695,6 @@ html,body{overflow-x:hidden}
 })();
 </script>
 </body>
+
 
 </html>
