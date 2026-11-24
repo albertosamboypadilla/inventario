@@ -3717,10 +3717,39 @@ function addMultiCodeRow(listId, kind, value){
   inp.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); const r = addMultiCodeRow(listId, kind); if(r) r.querySelector('input').focus(); } });
   list.appendChild(row); return row;
 }
+// Marcas conocidas del catálogo (DT Spare Parts) — para separar correctamente varios códigos
+// "Marca<TAB>código" que a veces quedan pegados en uno solo al pegar desde Excel/PDF.
+const OE_KNOWN_BRANDS = new Set(["mercedes-benz","renault","volvo","scania","iveco","zg","daf","man","bpw","cummins","fruehauf","kögel","others","neoplan","meritor","saf","krone","schmitz cargobull","alfa romeo","audi","bmw","citroën","chevrolet","jaguar","seat","skoda","vw","fiat","hyundai","lancia","peugeot","ford","toyota","opel","general motors","deutz","foden trucks","claas","bmc","doll","gigant","peterbilt","caterpillar","vdl","temsa","freightliner","sinotruk (cnhtc)","enasa","case ih","john deere","ika","nissan","liebherr","mercury","daihatsu","mazda","valx","rootes","dodge","isuzu","bova","om","setra","bedford","daewoo","alexander dennis","drögmöller","hino","ferrari","dana","benalu","sisu","ud trucks","bristol","astra","erf","mack","shacman","jost","fpt","international","ikarus","gmc","infiniti","bharatbenz","henschel","doosan","hitachi","suer","busscar","dacia","bertoja","kaiser","legras industries","rockwell","rolfo","agco","athey","faun","new holland","solaris","chrysler","saab","bucher","blmc","bond","buick","demag","hanomag","agrale","marcopolo","mwm","alpine","berliet","komatsu","king long","steyr","hendrickson","kempf","jeep","honda","mitsubishi","yanmar","bobcat","bombardier","austin","ayats","agria","farymann diesel","detroit diesel","fuso (mitsubishi)","faw","fendt","carbodies","buessing","eaton","öaf","ac","faymonville","goldhofer","zorzi","abarth","cadillac","hürlimann","land rover","reisch","kässbohrer","otokar","standard automobile","commer","berkhof","federal","aebi","langendorf","tata","paccar","holder","nooteboom","cagiva","carraro","lamborghini","landini","massey ferguson","enranger","porsche","bugatti","hymer","heuliez","karosa","alcatel","foton","irizar","dongfeng","kramer","ebro","andoria","volga","leyland","van hool","viberti","schwarzmüller","smart","kia","lombardini","trailor","new-ref","lohr","jcb","atlas copco","battaglino","yutong","howo","tatra","lexus","avia","dongfeng (dfac)","camc","kaelble","acura","am general","karmann","kenworth","ssangyong","aston martin","terex","smb","mini","kubota","grove","krupp","multicar","same","rover","benelli","borgward","aro","bentley","fliegl","duewag","askam","asca","bartoletti","amc","asia motors","alpina","chereau","bautz","allison","lister","pegaso","perkins","romania man","maybach","awd","brilliance","mahindra","puch","byd","eos coach","sicca","ford otosan","leveques (remorques)","watson & chalin","vme","eicher","hobbycar","saurer","jonckheere","knaus","seddon diesel","artega","auto union","baw"]);
+// Si un texto trae varios pares "Marca<TAB>código" pegados con un solo espacio de por medio
+// (típico al pegar de Excel), esto los separa en referencias independientes.
+function normalizarOeMulti(raw){
+  let s = String(raw||'').trim();
+  if(!/\t/.test(s)) return [s];
+  s = s.replace(/\t/g, ':');
+  const tokens = s.split(/\s+/);
+  const starts = [0];
+  for(let i=1;i<tokens.length;i++){
+    const t = tokens[i]; const ci = t.indexOf(':'); if(ci <= 0) continue;
+    const brandWord = t.slice(0, ci).toLowerCase();
+    if(OE_KNOWN_BRANDS.has(brandWord)){ starts.push(i); continue; }
+    const prevStart = starts[starts.length-1];
+    for(let j=i-1; j>=prevStart; j--){
+      const cand = tokens.slice(j,i).map(x=>x.toLowerCase()).join(' ') + ' ' + brandWord;
+      if(OE_KNOWN_BRANDS.has(cand)){ starts.push(j); break; }
+    }
+  }
+  const groups = [];
+  for(let k=0;k<starts.length;k++){ const from = starts[k], to = k+1<starts.length ? starts[k+1] : tokens.length; groups.push(tokens.slice(from,to).join(' ').trim()); }
+  return groups.filter(Boolean);
+}
 function splitCodes(text, kind){
   text = String(text||'').trim(); if(!text) return [];
   const parts = kind === 'gtin' ? text.split(/[|,;\s]+/) : text.split(/[|,;\n]+/);
-  return Array.from(new Set(parts.map(x=>x.trim()).filter(Boolean)));
+  const pre = Array.from(new Set(parts.map(x=>x.trim()).filter(Boolean)));
+  if(kind !== 'oe') return pre;
+  const out = [];
+  pre.forEach(x=>out.push(...normalizarOeMulti(x)));
+  return Array.from(new Set(out));
 }
 function readMultiCodes(listId){
   const list = document.getElementById(listId); if(!list) return [];
