@@ -694,10 +694,24 @@ function fxCabeza(p, inv, staff) {
     ${staff ? `<div class="fx-card fx-zeb"><div class="fx-ch"><span>${tr2('Código Zebra', 'Zebra code')}</span><b>${esc(zebra)}</b></div><div class="fx-bar">${bar}</div><button type="button" class="fx-btn fx-btn-d" data-fxtab="zebra">${fxIc('M6 9V3h12v6M6 18H4a1 1 0 0 1-1-1v-6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1h-2M6 14h12v7H6Z')} ${tr2('Imprimir etiqueta', 'Print label')}</button></div>` : ''}
   </div>`;
 }
+function fxOtrosConMismoCodigo(p) {
+  // Busca, entre TODOS los artículos (del catálogo o agregados), cuáles comparten algún
+  // código OE/fabricante con este — para que al ver un SKU aparezcan al lado todos los demás
+  // que tengan el mismo código original, aunque sean de otra marca o referencia distinta.
+  try {
+    const otros = equivalentes(p).map(r => PRODUCTS_BY_REF[r]).filter(Boolean);
+    if (!otros.length) return '';
+    return `<div class="fx-sec"><h4>${tr2('Otros artículos con el mismo código', 'Other items with the same code')} <em>${otros.length}</em></h4><div class="fx-eqlist">${otros.map(q => {
+      const qi = (typeof getInv === 'function') ? getInv(q.ref) : null; const st = qi ? (Number(qi.stock) || 0) : 0;
+      return `<button type="button" class="fx-eqit" data-fxref="${esc(q.ref)}"><b>${esc(q.sku || q.ref)}</b><span>${esc(q.title)} · ${esc(q.brand || '')}</span><small class="${st > 0 ? 'ok' : 'no'}">${st > 0 ? st + ' ' + tr2('en stock', 'in stock') : tr2('sin stock', 'out of stock')}</small></button>`;
+    }).join('')}</div></div>`;
+  } catch (e) { return ''; }
+}
 function fxRefs(p, inv) {
   const R = [...new Set([...(p.refsList || []), ...((inv && inv.oeRefs) || [])])];
   const A = fxApps(p.applications);
   return `${R.length ? `<div class="fx-sec"><h4>${tr2('Referencias cruzadas (OE)', 'Cross references (OE)')} <em>${R.length}</em></h4><div class="fx-tags">${R.map(r => `<span>${esc(r)}</span>`).join('')}</div></div>` : ''}
+  ${fxOtrosConMismoCodigo(p)}
   ${A.length ? `<div class="fx-sec"><h4>${tr2('Compatible con', 'Fits')} <em>${A.length}</em></h4><div class="fx-veh">${A.map((a, i) => `<div class="fx-v${i >= 8 ? ' fx-mas' : ''}"><span>${esc(a.nom)}</span>${a.an ? `<i>${esc(a.an)}</i>` : ''}</div>`).join('')}</div>${A.length > 8 ? `<button type="button" class="fx-vermas" onclick="this.previousElementSibling.classList.add('todo');this.remove()">${tr2('Ver los ' + A.length + ' vehículos', 'See all ' + A.length + ' vehicles')}</button>` : ''}</div>` : ''}
   ${p.specs ? `<div class="fx-sec"><h4>${tr2('Datos técnicos', 'Technical data')}</h4><div class="fx-specs">${String(p.specs).split(' | ').map(x => { const k = x.indexOf(':'); return k > 0 ? `<div><small>${esc(x.slice(0, k))}</small><b>${esc(x.slice(k + 1))}</b></div>` : `<div><b>${esc(x)}</b></div>`; }).join('')}</div></div>` : ''}`;
 }
@@ -740,6 +754,14 @@ document.addEventListener('click', e => {
   const tab = w.querySelector('[data-fxtab="codigos"]'); if (tab) tab.scrollIntoView({ block: 'nearest', inline: 'center' });
   setTimeout(() => { const i = document.getElementById('artAddGtinInput'); if (i) { i.scrollIntoView({ behavior: 'smooth', block: 'center' }); i.focus({ preventScroll: true }); } }, 60);
 }, true);
+// Click en "Otros artículos con el mismo código" → abre la ficha de ese otro artículo
+document.addEventListener('click', e => {
+  const b = e.target.closest && e.target.closest('[data-fxref]'); if (!b) return;
+  const ref = b.dataset.fxref; if (!ref) return;
+  e.preventDefault();
+  if (typeof currentUser !== 'undefined' && currentUser && typeof openArticleDetail === 'function') openArticleDetail(ref);
+  else if (typeof openProductModal === 'function') openProductModal(ref);
+});
 function fxIniciar() {
   if (typeof openProductModal === 'function') window.openProductModal = fxPublica;
   const r = window.renderArticleDetail; if (typeof r === 'function') window.renderArticleDetail = function () { r.apply(this, arguments); try { fxInterna(); } catch (e) { console.error('ficha', e); } };

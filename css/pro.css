@@ -407,6 +407,15 @@ html.pro .fx-v i { flex: none; font-style: normal; font: 700 12px ui-monospace, 
 html.pro .fx-veh .fx-mas { display: none; } html.pro .fx-veh.todo .fx-mas { display: flex; }
 html.pro .fx-vermas { margin-top: 10px; background: none; border: 0; color: var(--fx-o2); font: 700 14px var(--p-f); cursor: pointer; padding: 6px 0; }
 html.pro .fx-vermas:hover { color: var(--fx-w); }
+
+html.pro .fx-eqlist { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+html.pro .fx-eqit { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; background: var(--fx-c); border: 1px solid var(--fx-l); border-radius: 12px; padding: 11px 14px; cursor: pointer; transition: border-color .2s, transform .2s; font: inherit; }
+html.pro .fx-eqit:hover { border-color: var(--fx-l2); transform: translateX(2px); }
+html.pro .fx-eqit b { font: 700 14px ui-monospace, Consolas, monospace; color: var(--fx-w); }
+html.pro .fx-eqit span { font: 500 12.5px var(--p-f); color: var(--fx-t2); }
+html.pro .fx-eqit small { font: 700 11px var(--p-f); border-radius: 999px; padding: 2px 9px; margin-top: 2px; }
+html.pro .fx-eqit small.ok { color: #2ecc71; background: rgba(46,204,113,.12); border: 1px solid rgba(46,204,113,.3); }
+html.pro .fx-eqit small.no { color: var(--fx-t2); background: var(--fx-c2); border: 1px solid var(--fx-l); }
 html.pro .fx-bar svg rect { fill: #0b0d10 !important; } html.pro .fx-bar svg text { fill: #0b0d10 !important; }
 
 /* ficha en modo claro (sigue el botón ☀/☾ de la página) */
