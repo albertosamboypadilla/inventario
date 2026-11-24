@@ -586,7 +586,7 @@ function areaSel(){ const v = $('areaSel').value; if(!v) return null; const [tra
 function handleCode(code, source){
   code = String(code||'').trim(); if(!code) return;
   const p = findByCode(code);
-  if(currentTab === 'bus'){ $('inBus').value = code; doSearch(); setTimeout(()=>{ $('inBus').value = ''; }, 50); if(p){ beep(true); openDetail(p.ref); if(isPrincipal()) setTimeout(()=> openEditBox(true), 200); } else { beep(false); toast(lastAmbiguous ? `${code} es referencia original de varios artículos. Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); } return; }
+  if(currentTab === 'bus'){ $('inBus').value = code; doSearch(); setTimeout(()=>{ $('inBus').value = ''; }, 50); if(p){ beep(true); openDetail(p.ref); } else { beep(false); toast(lastAmbiguous ? `${code} es referencia original de varios artículos. Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); } return; }
   if(!p){ beep(false); toast(lastAmbiguous ? `${code} es referencia original de ${lastAmbiguous.length} artículos (${lastAmbiguous.slice(0,3).join(', ')}…). Escanea el SKU o el GTIN.` : 'Código no encontrado: ' + code, 'bad'); return; }
   if(!isAdmin()){ beep(false); toast('Solo un administrador puede contar o recibir. Usa Buscar.', 'bad'); return; }
   const now = new Date();
