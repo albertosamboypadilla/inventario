@@ -2621,7 +2621,8 @@ function renderAreaSelect(){
   const sel = document.getElementById('areaSelect');
   if(!sel) return;
   activeArea();
-  sel.innerHTML = countAreas.map((a,i)=>`<option value="${i}" ${i===activeAreaIndex?'selected':''}>Piso ${a.piso || '—'} · ${a.tramo || '—'} / ${a.estante || '—'}</option>`).join('');
+  sel.innerHTML = countAreas.map((a,i)=>`<option value="${i}" ${i===activeAreaIndex?'selected':''}>Piso ${a.piso || '—'} · ${a.tramo || '—'} / ${a.estante || '—'}</option>`).join('')
+    + ubicacionesSinArea().map(u=>`<option value="v:${xlsxEsc(u.k)}">Piso — · ${xlsxEsc(u.tramo)} / ${xlsxEsc(u.estante)}</option>`).join('');
   const pisoEl = document.getElementById('pisoInput');
   const tramoEl = document.getElementById('tramoInput');
   const estanteEl = document.getElementById('estanteInput');
@@ -2629,7 +2630,28 @@ function renderAreaSelect(){
   if(tramoEl) tramoEl.value = countAreas[activeAreaIndex].tramo;
   if(estanteEl) estanteEl.value = countAreas[activeAreaIndex].estante;
 }
+// Igual que la app del celular: en la lista salen también las ubicaciones que ya tienen los artículos
+// (aunque no se hayan creado como área). Al elegir una, se crea el área sin tocar ningún artículo.
+function ubicacionesSinArea(){
+  const ya = new Set(countAreas.filter(a=>a.tramo && a.estante).map(a=>areaKey(a.tramo, a.estante))), out = new Map();
+  for(const ref of Object.keys(inventoryState || {})){
+    if(deletedRefs.includes(ref)) continue;
+    for(const l of allLocations(inventoryState[ref])){
+      const m = /^([^/]+)\/([^/]+)$/.exec(String(l||'').trim()); if(!m) continue;
+      const k = areaKey(m[1], m[2]); if(ya.has(k) || out.has(k)) continue;
+      out.set(k, {k, tramo: normTramo(m[1]), estante: normEstante(m[2])});
+    }
+  }
+  const nat = (a,b)=> String(a).localeCompare(String(b), 'es', {numeric:true, sensitivity:'base'});
+  return [...out.values()].sort((a,b)=> nat(a.tramo, b.tramo) || nat(a.estante, b.estante));
+}
 function setActiveAreaIndex(idx){
+  if(String(idx).startsWith('v:')){
+    const u = ubicacionesSinArea().find(x=>x.k === String(idx).slice(2));
+    if(u){ const pisoActual = (countAreas[activeAreaIndex] && countAreas[activeAreaIndex].piso) || '2';
+      countAreas.push({piso:pisoActual, tramo:u.tramo, estante:u.estante, counts:{}}); idx = countAreas.length - 1; syncLocationsFromAreas(); }
+    else idx = activeAreaIndex;
+  }
   activeAreaIndex = Number(idx)||0;
   saveMeta();
   renderAreaSelect();
