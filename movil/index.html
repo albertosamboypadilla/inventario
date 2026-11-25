@@ -1737,6 +1737,9 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
      Al tocar un campo esperamos un momento: si el teclado del iPhone salió, todo normal;
      si no salió, la pistola está conectada y ponemos nuestro teclado igualito al del iPhone. */
   let pistola = false;
+  // Por defecto se usa el teclado de fábrica del iPhone (con la Netum: doble clic al gatillo lo saca).
+  // El teclado de la app solo se usa si lo activas abajo en "Ver artículo".
+  let propio = false; try{ propio = localStorage.getItem('etk_teclado_app') === '1'; }catch(e){}
   const marcar = v=>{ pistola = v; };
   const altoBase = ()=> window.innerHeight;
   const tecladoNativoAbierto = ()=> window.visualViewport ? (window.visualViewport.height < altoBase() * 0.78) : false;
@@ -1774,15 +1777,28 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
   function poner(v, sinAviso){
     if(esNum(campo)){ v = v.replace(/[^0-9.]/g,''); const p = v.split('.'); if(p.length > 2) v = p[0] + '.' + p.slice(1).join(''); buf = v; campo.value = v.replace(/\.$/,''); }
     else campo.value = v;
-    try{ const n = campo.value.length; if(campo.setSelectionRange && !esNum(campo)) campo.setSelectionRange(n, n); }catch(_){}
     if(!sinAviso) campo.dispatchEvent(new Event('input', {bubbles:true}));
   }
-  const borrar = ()=>{ if(!campo) return; const v = valor(); if(!v) return; poner(v.slice(0,-1), /^(inInv|inRec)$/.test(campo.id||'')); if(navigator.vibrate) navigator.vibrate(5); };
+  // dónde está el cursor (igual que el iPhone: se escribe y se borra donde tocaste, o lo seleccionado)
+  const cursor = ()=>{ const n = campo.value.length; let a = n, b = n; try{ if(typeof campo.selectionStart === 'number'){ a = campo.selectionStart; b = campo.selectionEnd; } }catch(_){} return [Math.min(a,n), Math.min(b,n)]; };
+  const ponerCursor = k=>{ try{ campo.setSelectionRange(k, k); }catch(_){} };
+  function escribir(t){
+    if(!campo) return;
+    if(esNum(campo)) return poner(valor() + t);
+    const v = campo.value, [a, b] = cursor(); poner(v.slice(0, a) + t + v.slice(b)); ponerCursor(a + t.length);
+  }
+  const borrar = ()=>{
+    if(!campo) return; const sin = /^(inInv|inRec)$/.test(campo.id||'');
+    if(esNum(campo)){ const v = valor(); if(v) poner(v.slice(0,-1), sin); }
+    else { const v = campo.value, [a, b] = cursor(); if(a !== b){ poner(v.slice(0, a) + v.slice(b), sin); ponerCursor(a); } else if(a > 0){ poner(v.slice(0, a - 1) + v.slice(a), sin); ponerCursor(a - 1); } }
+    if(navigator.vibrate) navigator.vibrate(5);
+  };
   function abrir(el){
     campo = el; buf = esNum(el) ? String(el.value || '') : ''; capa = 'abc';
     mayus = !el.value && el.getAttribute('autocapitalize') !== 'none'; bloqMayus = el.getAttribute('autocapitalize') === 'characters';
     if(bloqMayus) mayus = true;
     el.setAttribute('inputmode','none'); pad.hidden = false; document.body.classList.add('etk-pad-on'); pintar();
+    if(!esNum(el)) setTimeout(()=>{ try{ if(el.selectionStart === el.selectionEnd && el.selectionStart === 0 && el.value) el.setSelectionRange(el.value.length, el.value.length); }catch(_){} }, 0);
     setTimeout(()=>{ try{ el.scrollIntoView({block:'center'}); const r = el.getBoundingClientRect(), top = window.innerHeight - (pad.offsetHeight || 300); if(r.bottom > top - 10){ const sc = el.closest('#sheet .in, #naOv, #etkArea ul'); (sc || document.scrollingElement).scrollTop += r.bottom - top + 30; } }catch(_){} }, 80);
   }
   function cerrar(){ pararRep(); if(campo) campo.removeAttribute('inputmode'); pad.hidden = true; document.body.classList.remove('etk-pad-on'); campo = null; }
@@ -1801,16 +1817,16 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
   function accion(b){
     if(!b || !campo || b.disabled) return;
     const a = b.dataset.a, c = b.dataset.c;
-    if(c !== undefined){ const ch = (capa === 'abc' && mayus) ? c.toUpperCase() : c; poner(valor() + ch); if(capa === 'abc' && mayus && !bloqMayus){ mayus = false; pintar(); } return; }
+    if(c !== undefined){ const ch = (capa === 'abc' && mayus) ? c.toUpperCase() : c; escribir(ch); if(mayus && !bloqMayus){ mayus = false; if(capa === 'abc') pintar(); } return; }
     if(a === 'bs') borrar();
-    else if(a === 'sp'){ poner(valor() + ' '); if(capa !== 'abc'){ capa = 'abc'; pintar(); } }
+    else if(a === 'sp'){ escribir(' '); if(capa !== 'abc'){ capa = 'abc'; pintar(); } }
     else if(a === 'sh'){ mayus = !mayus; pintar(); }
     else if(a === 'num' || a === 'sim' || a === 'abc'){ capa = a; pintar(); }
     else if(a === 'nativo'){ const el = campo; marcar(false); cerrar(); el.removeAttribute('inputmode'); el.blur(); setTimeout(()=>el.focus(), 80); }
     else if(a === 'listo'){ const el = campo; cerrar(); el.dispatchEvent(new Event('change', {bubbles:true})); el.blur(); }
     else if(a === 'ok'){
       const el = campo;
-      if(el.tagName === 'TEXTAREA'){ poner(valor() + '\n'); return; }                      // en cajas de varias líneas: salto de línea
+      if(el.tagName === 'TEXTAREA'){ escribir('\n'); return; }                      // en cajas de varias líneas: salto de línea
       cerrar(); el.dispatchEvent(new Event('change', {bubbles:true}));
       // "intro" solo busca / registra en las cajas de escaneo y donde la app ya usa Enter; en las demás solo cierra
       if(/^(inBus|inInv|inRec|nTramo|nEst|etkBuscar|edStock)$/.test(el.id || '')) el.dispatchEvent(new KeyboardEvent('keydown', {key:'Enter', bubbles:true, cancelable:true}));
@@ -1820,13 +1836,13 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
   // tocar fuera del campo y del teclado → se cierra (igual que el iPhone)
   document.addEventListener('pointerdown', e=>{ if(!pad.hidden && !pad.contains(e.target) && e.target !== campo && !editable(e.target)){ const el = campo; cerrar(); if(el && document.activeElement === el) el.blur(); } }, true);
   // volver a tocar el mismo campo (ya enfocado) con la pistola puesta → reabrir el teclado
-  document.addEventListener('touchend', e=>{ const el = e.target; if(pistola && pad.hidden && editable(el) && document.activeElement === el){ e.preventDefault(); abrir(el); } }, {passive:false});
+  document.addEventListener('touchend', e=>{ const el = e.target; if(propio && pistola && pad.hidden && editable(el) && document.activeElement === el){ e.preventDefault(); abrir(el); } }, {passive:false});
   document.addEventListener('focusout', e=>{ if(e.target === campo) setTimeout(()=>{ if(campo && document.activeElement !== campo) cerrar(); }, 120); });
 
   // al tocar un campo editable
   let chequeo = null;
   document.addEventListener('focusin', e=>{
-    const el = e.target; if(!editable(el) || el.id === 'etkBuscar' && false) return;
+    const el = e.target; if(!propio || !editable(el)) return;
     if(campo === el) return;
     if(el._etkSinTeclado){ el._etkSinTeclado = false; if(campo) cerrar(); return; }   // foco puesto por la app para escanear: sin teclado
     if(campo) cerrar();
@@ -1840,12 +1856,19 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
     }, 550);
   });
   // si la pistola está "conectada" pero el iPhone saca su teclado → la quitaron: volver a normal
-  if(window.visualViewport) window.visualViewport.addEventListener('resize', ()=>{ if(tecladoNativoAbierto() && pistola){ marcar(false); if(campo){ const el = campo; cerrar(); el.blur(); setTimeout(()=>el.focus(), 50); } } });
+  if(window.visualViewport) window.visualViewport.addEventListener('resize', ()=>{ if(propio && tecladoNativoAbierto() && pistola){ marcar(false); if(campo){ const el = campo; cerrar(); el.blur(); setTimeout(()=>el.focus(), 50); } } });
   // lecturas rápidas de la pistola = está conectada
   let ult = 0, rap = 0;
   document.addEventListener('keydown', e=>{ if(!e.isTrusted || !e.key || e.key.length !== 1) return; const t = Date.now(); rap = (t - ult < 50) ? rap + 1 : 0; ult = t; if(rap >= 3 && !tecladoNativoAbierto()) marcar(true); }, true);
   // al tocar un campo cuando ya está la pistola, el iPhone no debe intentar su teclado
-  document.addEventListener('touchstart', e=>{ if(pistola && editable(e.target)) e.target.setAttribute('inputmode','none'); }, {passive:true, capture:true});
+  document.addEventListener('touchstart', e=>{ if(propio && pistola && editable(e.target)) e.target.setAttribute('inputmode','none'); }, {passive:true, capture:true});
+
+  // interruptor (debajo de Ver artículo)
+  { const card = $$('inBus') && $$('inBus').closest('.card');
+    if(card){ const t = document.createElement('button'); t.type = 'button'; t.style.cssText = 'width:100%;margin-top:8px;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#9aa3b5;font-size:13px';
+      const pintarT = ()=> t.textContent = propio ? '⌨ Teclado de la app: ENCENDIDO (toca para usar el del iPhone)' : '⌨ Usando el teclado del iPhone · toca si la pistola no deja salir el teclado';
+      t.onclick = ()=>{ propio = !propio; try{ localStorage.setItem('etk_teclado_app', propio ? '1' : '0'); }catch(e){} if(!propio){ cerrar(); marcar(false); document.querySelectorAll('[inputmode=none]').forEach(x=>x.removeAttribute('inputmode')); } pintarT(); toast(propio ? 'Teclado de la app encendido' : 'Teclado del iPhone', 'ok'); };
+      pintarT(); card.appendChild(t); } }
 
   /* ---------- selector de área a lo largo, con buscador ---------- */
   const sel = $$('areaSel');
