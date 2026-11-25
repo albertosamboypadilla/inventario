@@ -1684,6 +1684,7 @@ html,body{overflow-x:hidden}
 <style>
 #etkPad{position:fixed;left:0;right:0;bottom:0;z-index:100000;background:#2b2b2d;padding:0 3px calc(4px + env(safe-area-inset-bottom));font-family:-apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}
 #etkPad[hidden]{display:none}
+input.etk-sel{background:rgba(10,132,255,.35)!important}
 #etkPad .bar{display:flex;justify-content:flex-end;align-items:center;height:42px;padding:0 12px;background:#1f1f21;margin:0 -3px 8px;border-top:.5px solid #3a3a3c}
 #etkPad .bar button{background:none;border:0;color:#0a84ff;font-size:17px;font-weight:600;padding:8px 4px}
 #etkPad .fila{display:flex;justify-content:center;gap:6px;margin:0 0 11px}
@@ -1746,7 +1747,7 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
 
   /* ---------- teclado tipo iPhone ---------- */
   const pad = document.createElement('div'); pad.id = 'etkPad'; pad.hidden = true; document.body.appendChild(pad);
-  let campo = null, buf = '', capa = 'abc', mayus = true, bloqMayus = false;
+  let campo = null, buf = '', capa = 'abc', mayus = true, bloqMayus = false, nuevoNum = false;
   const L = {
     abc:[['q','w','e','r','t','y','u','i','o','p'],['a','s','d','f','g','h','j','k','l','ñ'],['z','x','c','v','b','n','m']],
     num:[['1','2','3','4','5','6','7','8','9','0'],['-','/',':',';','(',')','$','&','@','"'],['.',',','?','!',"'"]],
@@ -1756,7 +1757,7 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
   function pintar(){
     const bar = `<div class="bar" style="justify-content:space-between"><button type="button" data-a="nativo" style="color:#8e8e93;font-weight:500;font-size:14px">Quité la pistola</button><button type="button" data-a="listo">Listo</button></div>`;
     if(esNum(campo)){
-      const dec = !(campo.step === '1' || /qty|Stock|copies/i.test(campo.id||'') || campo.className.includes('copies'));
+      const dec = !(campo.step === '1' || /^(qty|edStock|naStock)/i.test(campo.id||'') || campo.className.includes('copies'));
       const t = [['1',''],['2','ABC'],['3','DEF'],['4','GHI'],['5','JKL'],['6','MNO'],['7','PQRS'],['8','TUV'],['9','WXYZ']];
       pad.innerHTML = bar + `<div class="np">${t.map(([n,s])=>`<button type="button" data-c="${n}">${n}<small>${s}</small></button>`).join('')}`
         + (dec ? `<button type="button" data-c=".">.</button>` : `<button type="button" class="vac" disabled></button>`)
@@ -1777,6 +1778,7 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
   function poner(v, sinAviso){
     if(esNum(campo)){ v = v.replace(/[^0-9.]/g,''); const p = v.split('.'); if(p.length > 2) v = p[0] + '.' + p.slice(1).join(''); buf = v; campo.value = v.replace(/\.$/,''); }
     else campo.value = v;
+    campo.classList.remove('etk-sel');
     if(!sinAviso) campo.dispatchEvent(new Event('input', {bubbles:true}));
   }
   // dónde está el cursor (igual que el iPhone: se escribe y se borra donde tocaste, o lo seleccionado)
@@ -1784,24 +1786,25 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
   const ponerCursor = k=>{ try{ campo.setSelectionRange(k, k); }catch(_){} };
   function escribir(t){
     if(!campo) return;
-    if(esNum(campo)) return poner(valor() + t);
+    if(esNum(campo)){ const base = nuevoNum ? '' : valor(); nuevoNum = false; return poner(base + t); }
     const v = campo.value, [a, b] = cursor(); poner(v.slice(0, a) + t + v.slice(b)); ponerCursor(a + t.length);
   }
   const borrar = ()=>{
     if(!campo) return; const sin = /^(inInv|inRec)$/.test(campo.id||'');
-    if(esNum(campo)){ const v = valor(); if(v) poner(v.slice(0,-1), sin); }
+    if(esNum(campo)){ const v = valor(); if(nuevoNum){ nuevoNum = false; poner('', sin); } else if(v) poner(v.slice(0,-1), sin); }
     else { const v = campo.value, [a, b] = cursor(); if(a !== b){ poner(v.slice(0, a) + v.slice(b), sin); ponerCursor(a); } else if(a > 0){ poner(v.slice(0, a - 1) + v.slice(a), sin); ponerCursor(a - 1); } }
     if(navigator.vibrate) navigator.vibrate(5);
   };
   function abrir(el){
-    campo = el; buf = esNum(el) ? String(el.value || '') : ''; capa = 'abc';
+    campo = el; buf = esNum(el) ? String(el.value || '') : ''; capa = 'abc'; nuevoNum = esNum(el) && !!el.value;
     mayus = !el.value && el.getAttribute('autocapitalize') !== 'none'; bloqMayus = el.getAttribute('autocapitalize') === 'characters';
     if(bloqMayus) mayus = true;
     el.setAttribute('inputmode','none'); pad.hidden = false; document.body.classList.add('etk-pad-on'); pintar();
+    document.querySelectorAll('.etk-sel').forEach(x=>x.classList.remove('etk-sel')); if(nuevoNum) el.classList.add('etk-sel');
     if(!esNum(el)) setTimeout(()=>{ try{ if(el.selectionStart === el.selectionEnd && el.selectionStart === 0 && el.value) el.setSelectionRange(el.value.length, el.value.length); }catch(_){} }, 0);
     setTimeout(()=>{ try{ el.scrollIntoView({block:'center'}); const r = el.getBoundingClientRect(), top = window.innerHeight - (pad.offsetHeight || 300); if(r.bottom > top - 10){ const sc = el.closest('#sheet .in, #naOv, #etkArea ul'); (sc || document.scrollingElement).scrollTop += r.bottom - top + 30; } }catch(_){} }, 80);
   }
-  function cerrar(){ pararRep(); if(campo) campo.removeAttribute('inputmode'); pad.hidden = true; document.body.classList.remove('etk-pad-on'); campo = null; }
+  function cerrar(){ document.querySelectorAll('.etk-sel').forEach(x=>x.classList.remove('etk-sel')); pararRep(); if(campo) campo.removeAttribute('inputmode'); pad.hidden = true; document.body.classList.remove('etk-pad-on'); campo = null; }
   pad.addEventListener('pointerdown', e=>e.preventDefault());
   let ultToque = 0, rep = null, repT = null;
   const pararRep = ()=>{ clearTimeout(repT); clearInterval(rep); repT = rep = null; };
@@ -1836,7 +1839,13 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
   // tocar fuera del campo y del teclado → se cierra (igual que el iPhone)
   document.addEventListener('pointerdown', e=>{ if(!pad.hidden && !pad.contains(e.target) && e.target !== campo && !editable(e.target)){ const el = campo; cerrar(); if(el && document.activeElement === el) el.blur(); } }, true);
   // volver a tocar el mismo campo (ya enfocado) con la pistola puesta → reabrir el teclado
-  document.addEventListener('touchend', e=>{ const el = e.target; if(propio && pistola && pad.hidden && editable(el) && document.activeElement === el){ e.preventDefault(); abrir(el); } }, {passive:false});
+  document.addEventListener('touchend', e=>{
+    const el = e.target; if(!propio || !pistola || !editable(el) || pad.contains(el)) return;
+    if(campo === el && !pad.hidden) return;                  // misma casilla: dejar que el iPhone mueva el cursor
+    e.preventDefault(); if(campo && campo !== el) cerrar();
+    el.setAttribute('inputmode','none'); el.focus({preventScroll:true}); abrir(el);
+    if(!esNum(el)) try{ const n = el.value.length; el.setSelectionRange(n, n); }catch(_){}
+  }, {passive:false, capture:true});
   document.addEventListener('focusout', e=>{ if(e.target === campo) setTimeout(()=>{ if(campo && document.activeElement !== campo) cerrar(); }, 120); });
 
   // al tocar un campo editable
