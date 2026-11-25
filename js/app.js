@@ -2594,11 +2594,16 @@ function submitScanCode(code){
 // próximo escaneo lo reemplaza solo — no hay que borrar a mano.
 function autoLimpiarBuscador(id){
   const el = document.getElementById(id); if(!el || el._autoLimpiar) return; el._autoLimpiar = true;
-  let listo = false;
+  // listo = lo que hay en la caja vino de un escaneo; el próximo escaneo lo reemplaza
+  let listo = false, ult = 0, rapidas = 0;
   el.addEventListener('keydown', e=>{
-    if(e.key === 'Enter'){ listo = !!el.value; setTimeout(()=>{ try{ el.select(); }catch(_){} }, 0); return; }
-    if(listo && e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey){ listo = false; el.value = ''; }
-    else if(listo && (e.key === 'Backspace' || e.key === 'Delete')) listo = false;
+    const t = Date.now(), gap = t - ult; ult = t;
+    if(e.key === 'Enter' || e.key === 'Tab'){ if(el.value) listo = true; rapidas = 0; setTimeout(()=>{ try{ el.select(); }catch(_){} }, 0); return; }
+    if(!e.key || e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey){ if(e.key === 'Backspace' || e.key === 'Delete') listo = false; return; }
+    // empieza algo nuevo después de una pausa y lo anterior fue un escaneo → se borra solo
+    if(listo && gap > 250){ el.value = ''; listo = false; rapidas = 0; }
+    rapidas = gap < 50 ? rapidas + 1 : 0;
+    if(rapidas >= 4) listo = true;          // teclas muy seguidas = pistola (aunque no mande Enter)
   });
   el.addEventListener('mousedown', ()=>{ listo = false; });
 }
