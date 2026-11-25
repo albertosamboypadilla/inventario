@@ -1739,7 +1739,7 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
   let pistola = false;
   // Por defecto se usa el teclado de fábrica del iPhone (con la Netum: doble clic al gatillo lo saca).
   // El teclado de la app solo se usa si lo activas abajo en "Ver artículo".
-  let propio = false; try{ propio = localStorage.getItem('etk_teclado_app') === '1'; }catch(e){}
+  let propio = true; try{ propio = localStorage.getItem('etk_teclado_app2') !== '0'; }catch(e){}   // encendido: sale solo cuando la pistola esconde el teclado del iPhone
   const marcar = v=>{ pistola = v; };
   const altoBase = ()=> window.innerHeight;
   const tecladoNativoAbierto = ()=> window.visualViewport ? (window.visualViewport.height < altoBase() * 0.78) : false;
@@ -1866,8 +1866,8 @@ body.etk-pad-on #etkArea ul{padding-bottom:calc(var(--etk-h,300px) + 20px)}
   // interruptor (debajo de Ver artículo)
   { const card = $$('inBus') && $$('inBus').closest('.card');
     if(card){ const t = document.createElement('button'); t.type = 'button'; t.style.cssText = 'width:100%;margin-top:8px;padding:10px;border-radius:12px;border:1px solid rgba(255,255,255,.15);background:transparent;color:#9aa3b5;font-size:13px';
-      const pintarT = ()=> t.textContent = propio ? '⌨ Teclado de la app: ENCENDIDO (toca para usar el del iPhone)' : '⌨ Usando el teclado del iPhone · toca si la pistola no deja salir el teclado';
-      t.onclick = ()=>{ propio = !propio; try{ localStorage.setItem('etk_teclado_app', propio ? '1' : '0'); }catch(e){} if(!propio){ cerrar(); marcar(false); document.querySelectorAll('[inputmode=none]').forEach(x=>x.removeAttribute('inputmode')); } pintarT(); toast(propio ? 'Teclado de la app encendido' : 'Teclado del iPhone', 'ok'); };
+      const pintarT = ()=> t.textContent = propio ? '⌨ Con la pistola sale el teclado de la app · toca para apagarlo' : '⌨ Teclado de la app apagado · toca para encenderlo';
+      t.onclick = ()=>{ propio = !propio; try{ localStorage.setItem('etk_teclado_app2', propio ? '1' : '0'); }catch(e){} if(!propio){ cerrar(); marcar(false); document.querySelectorAll('[inputmode=none]').forEach(x=>x.removeAttribute('inputmode')); } pintarT(); toast(propio ? 'Teclado de la app encendido' : 'Teclado del iPhone', 'ok'); };
       pintarT(); card.appendChild(t); } }
 
   /* ---------- selector de área a lo largo, con buscador ---------- */
