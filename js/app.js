@@ -1638,14 +1638,43 @@ function getFilteredProducts(){
     if(inv.altCodes && normCode(q).length >= 3 && inv.altCodes.some(c=>normCode(c).includes(normCode(q)))) return true;
     return false;
   });
-  return sortBySearch(res, q);
+  const orden = sortBySearch(res, q);
+  window.__equiv = null;
+  if(!q) return orden;
+  // Si lo buscado es un SKU / código exacto: ese artículo + sus EQUIVALENTES (los que comparten
+  // alguna referencia original / OE). Así, si uno no tiene stock, se ve el otro. Lo demás no sale.
+  const exactos = orden.filter(p=>{ const r = searchRank(p, q); return r === 0 || r === 3; });
+  if(!exactos.length) return orden;
+  const ya = new Set(exactos.map(p=>p.ref)), eq = [];
+  exactos.forEach(p=> equivalentesDe(p).forEach(e=>{ if(!ya.has(e.ref)){ ya.add(e.ref); eq.push(e); } }));
+  const st = r=> Number((inventoryState[r] || {}).stock) || 0;
+  eq.sort((a, b)=> st(b.ref) - st(a.ref) || _skuCollator.compare(String(a.ref), String(b.ref)));
+  window.__equiv = new Set(eq.map(p=>p.ref));
+  return [...exactos, ...eq];
+}
+// ---- equivalentes por referencia original (OE) ----
+function oeClave(r){ const s = String(r||'').trim(); const t = s.includes(':') ? s.slice(s.lastIndexOf(':') + 1) : s.split(/\s+/).pop(); const k = normCode(t); return k.length >= 5 ? k : ''; }
+function oeClavesDe(p){ const inv = inventoryState[p.ref] || {}; return [...new Set([...(p.refsList || []), ...(Array.isArray(inv.oeRefs) ? inv.oeRefs : [])].map(oeClave).filter(Boolean))]; }
+let _oeIdx = null, _oeN = -1, _oeT = 0;
+function oeIndice(){
+  const all = visibleProducts();
+  if(_oeIdx && _oeN === all.length && Date.now() - _oeT < 60000) return _oeIdx;
+  const m = new Map();
+  for(const p of all) for(const k of oeClavesDe(p)){ let l = m.get(k); if(!l){ l = []; m.set(k, l); } l.push(p); }
+  _oeIdx = m; _oeN = all.length; _oeT = Date.now(); return m;
+}
+function equivalentesDe(p){
+  const idx = oeIndice(), out = new Map();
+  for(const k of oeClavesDe(p)) for(const e of (idx.get(k) || [])) if(e.ref !== p.ref) out.set(e.ref, e);
+  return [...out.values()];
 }
 
 
 function productCardHtml(p){
   const inv = getInv(p.ref);
   const gtinAll = [...new Set([p.gtin, inv.gtin, ...(Array.isArray(inv.altCodes)?inv.altCodes:[])].filter(Boolean))];
-  const refsLine = p.refsList.length ? `<div><b>${tr('Refs. cruzadas','Cross refs.')}</b><span class="product-refs-list">${p.refsList.slice(0,3).join(', ')}${p.refsList.length>3?'…':''}</span></div>` : '';
+  const equivTag = (window.__equiv && window.__equiv.has(p.ref)) ? `<div style="display:inline-block;margin:4px 0;padding:3px 8px;border-radius:999px;background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.5);color:#4ade80;font-size:11px;font-weight:800">🔁 Equivalente · misma ref. original</div>` : '';
+  const refsLine = equivTag + (p.refsList.length ? `<div><b>${tr('Refs. cruzadas','Cross refs.')}</b><span class="product-refs-list">${p.refsList.slice(0,3).join(', ')}${p.refsList.length>3?'…':''}</span></div>` : '');
   // El código de barras visible es el código Zebra que la propia web le asigna a cada
   // artículo (Code 39) — no el GTIN del fabricante — así se puede imprimir y escanear con
   // cualquier lector físico usando siempre el mismo código interno del negocio.
