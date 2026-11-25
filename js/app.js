@@ -2590,6 +2590,20 @@ function submitScanCode(code){
     if(el) el.focus();
   }
 }
+// Buscadores: después de escanear (la pistola manda Enter) el código queda marcado y el
+// próximo escaneo lo reemplaza solo — no hay que borrar a mano.
+function autoLimpiarBuscador(id){
+  const el = document.getElementById(id); if(!el || el._autoLimpiar) return; el._autoLimpiar = true;
+  let listo = false;
+  el.addEventListener('keydown', e=>{
+    if(e.key === 'Enter'){ listo = !!el.value; setTimeout(()=>{ try{ el.select(); }catch(_){} }, 0); return; }
+    if(listo && e.key && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey){ listo = false; el.value = ''; }
+    else if(listo && (e.key === 'Backspace' || e.key === 'Delete')) listo = false;
+  });
+  el.addEventListener('mousedown', ()=>{ listo = false; });
+}
+autoLimpiarBuscador('catalogSearch'); autoLimpiarBuscador('invSearchInput');
+setTimeout(()=>{ autoLimpiarBuscador('catalogSearch'); autoLimpiarBuscador('invSearchInput'); }, 1500);
 let _invSearchTimer = null;
 document.getElementById('invSearchInput') && document.getElementById('invSearchInput').addEventListener('input', e=>{
   invSearchTerm = e.target.value.trim().toLowerCase();
