@@ -457,6 +457,7 @@ try{if(navigator.onLine)fetch('/version.json?t='+Date.now(),{cache:'no-store'}).
       <div class="inv-area-row">
         <select id="areaSelect" onchange="setActiveAreaIndex(this.value)"></select>
         <button class="mini-btn mini-btn--del" onclick="removeActiveArea()">🗑 Eliminar área</button>
+        <button class="mini-btn mini-btn--del" onclick="eliminarTramo()" title="Borra un tramo completo: todas sus áreas y esa ubicación en todos los artículos (descarga respaldo antes)">🗑 Eliminar tramo</button>
         <button class="mini-btn mini-btn--del" onclick="clearActiveCount()">⟲ Borrar conteo</button>
         <div class="inv-area-fields">
           <label class="inv-piso-label">Piso<select id="pisoInput" onchange="commitPiso(this.value)">

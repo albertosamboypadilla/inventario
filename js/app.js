@@ -1328,7 +1328,7 @@ function restoreCustomProducts(){
 /* ===================== PDF "Lista de acomodo" (mismo en la PC y en el celular) =====================
    Genera un PDF A4 sin librerías: artículos agrupados y ordenados por ubicación, con casilla ☐ para
    marcar a mano cuando se coloca cada uno. Se usa al Cerrar Entrada de Recepción y de Inventario. */
-function etLocLabel(l){ if(!l) return 'SIN UBICACIÓN'; const m = /^([^/]+)\/([^/]+)$/.exec(l); return m ? `Tramo ${m[1]} · Estante ${m[2]}` : String(l); }
+function etLocLabel(l){ if(!l) return 'SIN UBICACIÓN'; const m = /^([^/]+)\/([^/]+)$/.exec(l); return m ? `Tramo ${m[1]} · Cuadro ${m[2]}` : String(l); }
 function etBuildAcomodoPdf(o){
   // o = {titulo, subtitulo, usuario, fecha (Date), items:[{ref,title,qty,location}]}
   const W = 595.28, H = 841.89, M = 36;
@@ -1681,7 +1681,14 @@ function productCardHtml(p){
   const zebraCode = internalCodes[p.ref] || getInternalCode(p.ref);
   const zebraBarcodeSvg = code39SvgHtml(zebraCode);
   const gtinLine = `<div><b>${tr('Código de barras','Barcode')}</b><span>${zebraBarcodeSvg ? `<div class="product-barcode-wrap">${zebraBarcodeSvg}<small>Zebra ${zebraCode}</small></div>` : ''}${gtinAll.map(g=>`<div>${g}</div>`).join('')}</span></div>`;
-  const locLine = inv.location ? allLocationsLabel(inv) : tr('Sin asignar','Unassigned');
+  const _locLocs = allLocations(inv);
+  const locLine = _locLocs.length
+    ? _locLocs.map(l => {
+        const m = /^([^/]+)\/([^/]+)$/.exec(l);
+        if(m) return `<span class="et-loc-pill"><span class="et-loc-tramo">${m[1]}</span><span class="et-loc-sep"></span><span class="et-loc-cuadro-wrap"><span class="et-loc-cuadro-label">Cuadro</span><span class="et-loc-cuadro">${m[2]}</span></span></span>`;
+        return `<span class="et-loc-pill et-loc-plain">${l}</span>`;
+      }).join(' ')
+    : `<span style="color:var(--text-secondary);font-size:.8rem;">${tr('Sin asignar','Unassigned')}</span>`;
   return `
   <article class="product-card" data-ref="${p.ref}">
     <div class="product-visual" onclick="event.stopPropagation();openZoom('${p.ref}')"><img src="${p.img}" alt="${p.title} — ${p.ref}" loading="lazy" onerror="this.src='img/mascota-rinoceronte.svg'"></div>
@@ -1699,7 +1706,7 @@ function productCardHtml(p){
       </div>
       <div class="stock-row">
         ${stockPillHtml(inv.stock)}
-        <span class="stock-location">📍 ${locLine}</span>
+        <span class="stock-location">${locLine}</span>
       </div>
       <div class="product-footer-row">
         <button class="btn-cart" onclick="event.stopPropagation();addToCart('${p.ref}')">+ ${tr('Carrito','Cart')}</button>
@@ -2867,7 +2874,7 @@ function closeAreaEntry(){
   const now = new Date();
   inventoryEntriesLog.unshift({date: now.toISOString(), user: currentUser ? currentUser.username : '—', area: area.tramo + '/' + area.estante, totalUnits: totalQty, items});
   inventoryEntriesLog = inventoryEntriesLog.slice(0, 200);
-  try{ etDownloadBlob(etBuildAcomodoPdf({titulo:'Entrada de inventario — Lista de acomodo', subtitulo:`Tramo ${area.tramo} · Estante ${area.estante}`, usuario: currentUser ? currentUser.username : '', fecha: now, items}), `entrada_inventario_${etStamp(now)}.pdf`); }catch(e){ console.warn('PDF', e); }
+  try{ etDownloadBlob(etBuildAcomodoPdf({titulo:'Entrada de inventario — Lista de acomodo', subtitulo:`Tramo ${area.tramo} · Cuadro ${area.estante}`, usuario: currentUser ? currentUser.username : '', fecha: now, items}), `entrada_inventario_${etStamp(now)}.pdf`); }catch(e){ console.warn('PDF', e); }
   saveInventory();
   saveMeta();
   renderCountedItemsList();
@@ -2919,6 +2926,48 @@ function playLocationAlertSound(){
 /* ---------- varias ubicaciones por artículo ---------- */
 function extraLocs(inv){ return Array.isArray(inv && inv.extraLocations) ? inv.extraLocations.filter(l=>l && l !== inv.location) : []; }
 function allLocations(inv){ const out = []; if(inv && inv.location) out.push(inv.location); extraLocs(inv).forEach(l=>{ if(!out.includes(l)) out.push(l); }); return out; }
+/* ---------- Quitar una ubicación de un artículo / eliminar un tramo completo ---------- */
+function esAdminEt(){ return !!(currentUser && currentUser.role === 'admin'); }
+function ponerUbicaciones(inv, locs){ inv.location = locs[0] || ''; inv.extraLocations = locs.slice(1); }
+// ✕ en la tarjeta "Ubicación en almacén": quita solo ese lugar a ese artículo
+function quitarUbicacion(ref, i){
+  if(!esAdminEt()){ showToast('Solo un administrador puede quitar ubicaciones.'); return; }
+  const inv = getInv(ref), locs = allLocations(inv), l = locs[Number(i)];
+  if(!l) return;
+  if(!confirm(`¿Quitar la ubicación ${formatLocationLabel(l)} del artículo ${ref}?` + (locs.length === 1 ? '\n\nEs su única ubicación: quedará "Sin asignar".' : ''))) return;
+  ponerUbicaciones(inv, locs.filter(x=> x !== l));
+  saveInventory();
+  renderCatalogCards();
+  if(typeof articleDetailRef !== 'undefined' && articleDetailRef === ref && typeof openArticleDetail === 'function') openArticleDetail(ref);
+  showToast(`✓ Ubicación ${formatLocationLabel(l)} quitada de ${ref}.`);
+}
+// Botón "Eliminar tramo": borra el tramo completo (todas sus áreas y esa ubicación en todos los artículos)
+function eliminarTramo(){
+  if(!esAdminEt()){ showToast('Solo un administrador puede eliminar tramos.'); return; }
+  const sugerido = countAreas[activeAreaIndex] ? countAreas[activeAreaIndex].tramo : '';
+  const t = normTramo(prompt('Escribe el TRAMO que quieres eliminar completo (ej. T03):', sugerido || '') || '');
+  if(!t){ showToast('Cancelado.'); return; }
+  const tramoDe = l => { const m = /^([^/]+)\/([^/]+)$/.exec(String(l||'').trim()); return m ? normTramo(m[1]) : ''; };
+  const areas = countAreas.filter(a=> normTramo(a.tramo) === t);
+  const conConteo = areas.filter(a=> a.counts && Object.keys(a.counts).length);
+  if(conConteo.length){ playErrorSound(); alert(`El tramo ${t} tiene conteo sin cerrar en: ${conConteo.map(a=>a.tramo+' / '+a.estante).join(', ')}.\n\nCierra la entrada o borra ese conteo primero. No se eliminó nada.`); return; }
+  const refs = Object.keys(inventoryState).filter(ref=> !deletedRefs.includes(ref) && allLocations(inventoryState[ref]).some(l=> tramoDe(l) === t));
+  if(!areas.length && !refs.length){ showToast(`El tramo ${t} no existe en la lista ni en ningún artículo.`); return; }
+  if(!confirm(`Vas a ELIMINAR el tramo ${t} completo:\n• ${areas.length} área(s) de la lista de ubicaciones\n• Se quita esa ubicación de ${refs.length} artículo(s) (el stock no se toca)\n\nPrimero se descarga un respaldo. ¿Continuar?`)) return;
+  if(normTramo(prompt(`Para confirmar, escribe otra vez el tramo: ${t}`) || '') !== t){ showToast('No coincide — no se eliminó nada.'); return; }
+  downloadFullBackup();
+  let sinUbic = 0;
+  for(const ref of refs){
+    const inv = inventoryState[ref], quedan = allLocations(inv).filter(l=> tramoDe(l) !== t);
+    ponerUbicaciones(inv, quedan); if(!quedan.length) sinUbic++;
+  }
+  countAreas = countAreas.filter(a=> normTramo(a.tramo) !== t);
+  activeAreaIndex = 0; activeArea();
+  syncLocationsFromAreas();
+  saveInventory(); saveMeta();
+  renderAreaSelect(); renderCountedItemsList(); renderInventoryStats(); renderCatalogCards();
+  showToast(`✓ Tramo ${t} eliminado: ${areas.length} área(s) y ${refs.length} artículo(s)` + (sinUbic ? ` (${sinUbic} quedaron sin ubicación)` : '') + '.');
+}
 function allLocationsLabel(inv){ const l = allLocations(inv); return l.length ? l.map(formatLocationLabel).join('  ＋  ') : formatLocationLabel(''); }
 // lugares donde ya está el artículo: sus ubicaciones + áreas donde está contado sin cerrar
 function otherPlaces(ref, inv, here){
@@ -3544,8 +3593,8 @@ function renderInventoryStats(){
 function formatLocationLabel(loc){
   if(!loc) return 'Ubicación pendiente';
   if(/^[^/]+\/[^/]+$/.test(loc)){
-    const [tramo, estante] = loc.split('/');
-    return `Tramo ${tramo} · Estante ${estante}`;
+    const [tramo, cuadro] = loc.split('/');
+    return `Tramo ${tramo} · Cuadro ${cuadro}`;
   }
   return loc;
 }
